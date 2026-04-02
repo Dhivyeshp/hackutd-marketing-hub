@@ -17,7 +17,6 @@ import {
   QUICK_LINKS,
   TEAM_COLORS,
   TEAM_ORDER,
-  cloneRequests,
 } from '@/lib/marketing'
 import { cn } from '@/lib/utils'
 
@@ -29,21 +28,20 @@ export default function OverviewPanel({ previewMode = false }) {
 
   async function load() {
     setLoading(true)
-    const [tasksRes, reelsRes] = await Promise.all([fetchTasks(), fetchReels()])
+    const [tasksRes, reelsRes] = await Promise.all([
+      fetchTasks(),
+      fetchReels().catch(() => ({ reels: [] })),
+    ])
     setTasks(tasksRes.tasks)
     setReels(reelsRes.reels)
 
     try {
-      const sheetsRes = await fetch('/api/sheets')
-      const data = await sheetsRes.json()
-      // Map sheet rows to simple request objects for counting
-      setRequests((data.data ?? []).map((r, i) => ({
-        id: `req-${i}`,
-        team: guessTeam(r),
-        status: 'Submitted',
-      })))
+      const requestsRes = await fetch('/api/requests', { cache: 'no-store' })
+      const data = await requestsRes.json()
+      if (!requestsRes.ok) throw new Error(data.error ?? 'Failed to load requests')
+      setRequests(data.requests ?? [])
     } catch {
-      setRequests(cloneRequests())
+      setRequests([])
     }
 
     setLoading(false)
@@ -225,12 +223,4 @@ export default function OverviewPanel({ previewMode = false }) {
       </section>
     </div>
   )
-}
-
-function guessTeam(row) {
-  const all = Object.values(row).join(' ').toLowerCase()
-  if (all.includes('design') || all.includes('logo') || all.includes('graphic')) return 'design'
-  if (all.includes('ui') || all.includes('ux') || all.includes('figma')) return 'uiux'
-  if (all.includes('outreach') || all.includes('email') || all.includes('sponsor')) return 'outreach'
-  return 'content'
 }

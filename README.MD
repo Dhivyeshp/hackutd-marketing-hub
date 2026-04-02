@@ -233,6 +233,43 @@ status: page.properties["Progress"]?.status?.name,
 
 ---
 
+## Step-by-step local testing
+
+1. Copy [`.env.example`](c:\Projects\marketing-tool\.env.example) to `.env.local`
+2. Fill in:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `CLICKUP_API_KEY`
+   - `CLICKUP_LIST_ID`
+   - `CLICKUP_TEAM_ID`
+   - `NOTION_API_KEY`
+   - `NOTION_DATABASE_ID`
+3. In Supabase, run the schema from [CLAUDE.MD](c:\Projects\marketing-tool\CLAUDE.MD)
+4. Seed one lead account manually in the `users` table
+5. Run `npm install`
+6. Run `npm run dev`
+7. Open `http://localhost:3000/login`
+8. Test existing-user login:
+   - enter the seeded lead email
+   - if `RESEND_API_KEY` is not set, the verify page will show the code directly in local dev
+9. Test onboarding:
+   - open `/onboarding?email=member@example.com`
+   - create a member with your `INVITE_CODE`
+   - verify with the emailed code or the local dev code
+10. Test requests:
+   - sign in as the lead
+   - open `/dashboard`
+   - go to Requests
+   - confirm `Approve` stays disabled until an assignee is selected
+   - click `Defer` and confirm the card stays visible in Submitted with lower opacity
+   - click `Reconsider` and confirm it becomes active again
+
+Notes:
+- `POST /api/requests` is public for Google Apps Script.
+- `PATCH /api/requests/[id]/approve` and `PATCH /api/requests/[id]/status` are protected.
+- `/dashboard` is lead-only and `/my-tasks` is member-only.
+
 ## Commands
 
 ```bash

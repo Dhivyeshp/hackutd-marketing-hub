@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Check, CheckSquare, ExternalLink, Plus, RefreshCw, TriangleAlert, UserPlus, Users, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, CheckSquare, ExternalLink, Plus, RefreshCw, TriangleAlert, UserPlus, X } from 'lucide-react'
 import { createClickUpTask, fetchRoster, fetchTasks } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   countOpenTasks,
   formatDateLabel,
@@ -50,131 +51,182 @@ const TEAM_MEMBERS = [
   'Sristi Srinivasan', 'Ann Jayan', 'Shraddha Subash', 'Karan Jatoth',
 ]
 
-function TaskCard({ task, preview, onCycleStatus, onAssigneesUpdated }) {
-  const [editing, setEditing]   = useState(false)
-  const [localAssignees, setLocalAssignees] = useState(task.assignees ?? [])
-  const [saving, setSaving]     = useState(false)
-  const [saveError, setSaveError] = useState(null)
+// Deterministic color per name
+const AVATAR_COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-rose-500', 'bg-teal-500', 'bg-orange-500', 'bg-sky-500',
+  'bg-pink-500', 'bg-indigo-500', 'bg-lime-600', 'bg-cyan-600',
+]
+function avatarColor(name) {
+  const i = TEAM_MEMBERS.indexOf(name)
+  return AVATAR_COLORS[i >= 0 ? i % AVATAR_COLORS.length : 0]
+}
+function initials(name) {
+  return name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()
+}
 
-  const unselected = TEAM_MEMBERS.filter(m => !localAssignees.includes(m))
+function AssigneeStack({ assignees, taskId, onSaved }) {
+  const [open, setOpen]           = useState(false)
+  const [local, setLocal]         = useState(assignees)
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState(null)
+  const MAX_VISIBLE = 3
+
+  // keep local in sync if parent refreshes
+  const prevAssignees = useRef(assignees)
+  if (prevAssignees.current !== assignees) {
+    prevAssignees.current = assignees
+    setLocal(assignees)
+  }
 
   function toggle(name) {
-    setLocalAssignees(prev =>
-      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
-    )
+    setLocal(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])
   }
 
   async function save() {
     setSaving(true)
-    setSaveError(null)
+    setError(null)
     try {
       const res = await fetch('/api/clickup', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: task.id, assignees: localAssignees }),
+        body: JSON.stringify({ taskId, assignees: local }),
       })
       if (!res.ok) {
         const d = await res.json()
         throw new Error(d.error ?? 'Failed to update')
       }
-      onAssigneesUpdated(task.id, localAssignees)
-      setEditing(false)
+      onSaved(taskId, local)
+      setOpen(false)
     } catch (err) {
-      setSaveError(err.message)
+      setError(err.message)
     } finally {
       setSaving(false)
     }
   }
 
   function cancel() {
-    setLocalAssignees(task.assignees ?? [])
-    setSaveError(null)
-    setEditing(false)
+    setLocal(assignees)
+    setError(null)
+    setOpen(false)
   }
 
+  const visible  = local.slice(0, MAX_VISIBLE)
+  const overflow = local.length - MAX_VISIBLE
+
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 transition hover:bg-accent/40">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
-            {task.due && (
-              <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                Due {formatDateLabel(task.due, { month: 'short', day: 'numeric', year: 'numeric' })}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="flex items-center gap-1 rounded-lg p-1 transition hover:bg-accent" title="Edit assignees">
+          {/* Avatar stack */}
+          <div className="flex -space-x-2">
+            {visible.map(name => (
+              <span
+                key={name}
+                title={name}
+                className={cn(
+                  'inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-card',
+                  avatarColor(name)
+                )}
+              >
+                {initials(name)}
+              </span>
+            ))}
+            {overflow > 0 && (
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
+                +{overflow}
+              </span>
+            )}
+            {local.length === 0 && (
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border bg-muted text-muted-foreground">
+                <UserPlus className="h-3.5 w-3.5" />
               </span>
             )}
           </div>
+        </button>
+      </PopoverTrigger>
 
-          {/* Assignees row */}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {localAssignees.length > 0
-              ? localAssignees.map(a => (
-                  <span key={a} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
-                    {a}
-                    {editing && (
-                      <button onClick={() => toggle(a)} className="ml-0.5 rounded-full hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </span>
-                ))
-              : !editing && <span className="text-xs text-muted-foreground">No assignees</span>
-            }
-            {!editing && (
+      <PopoverContent align="end" className="w-64 p-3 space-y-3">
+        <p className="text-xs font-semibold text-foreground">Assignees</p>
+
+        {/* Member list */}
+        <div className="space-y-1 max-h-52 overflow-y-auto">
+          {TEAM_MEMBERS.map(name => {
+            const selected = local.includes(name)
+            return (
               <button
-                onClick={() => setEditing(true)}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                key={name}
+                onClick={() => toggle(name)}
+                className={cn(
+                  'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs transition',
+                  selected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted text-foreground'
+                )}
               >
-                <UserPlus className="h-3 w-3" /> Edit
+                <span className={cn('inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white', avatarColor(name))}>
+                  {initials(name)}
+                </span>
+                <span className="flex-1 truncate">{name}</span>
+                {selected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-primary" />}
               </button>
-            )}
-          </div>
+            )
+          })}
+        </div>
 
-          {/* Assignee picker */}
-          {editing && (
-            <div className="mt-2 space-y-2">
-              <div className="flex flex-wrap gap-1.5">
-                {unselected.map(name => (
-                  <button
-                    key={name}
-                    onClick={() => toggle(name)}
-                    className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground transition hover:border-foreground hover:text-foreground"
-                  >
-                    + {name}
-                  </button>
-                ))}
-              </div>
-              {saveError && <p className="text-xs text-destructive">{saveError}</p>}
-              <div className="flex gap-2">
-                <button
-                  onClick={save}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
-                >
-                  <Check className="h-3 w-3" />
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button onClick={cancel} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-accent">
-                  Cancel
-                </button>
-              </div>
-            </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" className="flex-1 h-7 text-xs" onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={cancel}>
+            Cancel
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function TaskCard({ task, preview, onCycleStatus, onAssigneesUpdated }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-3 transition hover:bg-accent/40">
+      <div className="flex items-center gap-3">
+        {/* Left: title + due */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
+          {task.due && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Due {formatDateLabel(task.due, { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Right: team badge + status + assignees + link */}
+        <div className="flex flex-shrink-0 items-center gap-2">
           <TeamBadge team={task.team} />
+
           {preview ? (
-            <button onClick={() => onCycleStatus(task.id)} className="rounded-full" title="Cycle status">
+            <button onClick={() => onCycleStatus(task.id)} title="Cycle status">
               <Badge variant={STATUS_COLORS[task.status] ?? 'secondary'}>{formatTaskStatus(task.status)}</Badge>
             </button>
           ) : (
             <Badge variant={STATUS_COLORS[task.status] ?? 'secondary'}>{formatTaskStatus(task.status)}</Badge>
           )}
+
+          <AssigneeStack
+            assignees={task.assignees ?? []}
+            taskId={task.id}
+            onSaved={onAssigneesUpdated}
+          />
+
           {task.clickupUrl && (
-            <a href={task.clickupUrl} target="_blank" rel="noopener noreferrer"
-              className="rounded-full p-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-              title="Open in ClickUp">
+            <a
+              href={task.clickupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground transition hover:text-foreground"
+              title="Open in ClickUp"
+            >
               <ExternalLink className="h-4 w-4" />
             </a>
           )}
