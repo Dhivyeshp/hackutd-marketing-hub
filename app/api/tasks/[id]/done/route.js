@@ -1,10 +1,13 @@
 import { cookies } from 'next/headers'
 
 function getSession() {
-  const cookieStore = cookies()
-  const raw = cookieStore.get('hub_session')?.value
+  const raw = cookies().get('hub_session')?.value
   if (!raw) return null
-  try { return JSON.parse(raw) } catch { return null }
+  try {
+    const session = JSON.parse(raw)
+    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
+    return session
+  } catch { return null }
 }
 
 export async function PATCH(request, { params }) {

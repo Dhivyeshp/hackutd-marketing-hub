@@ -1,4 +1,15 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+
+function getSession() {
+  const raw = cookies().get('hub_session')?.value
+  if (!raw) return null
+  try {
+    const session = JSON.parse(raw)
+    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
+    return session
+  } catch { return null }
+}
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY
 const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID
@@ -103,6 +114,9 @@ async function checkClickUp() {
 }
 
 export async function GET() {
+  const session = getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const [notion, clickup] = await Promise.all([checkNotion(), checkClickUp()])
   const ok = notion.ok && clickup.ok
 

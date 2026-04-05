@@ -31,8 +31,11 @@ export function middleware(request) {
 
   const session = getSession(request)
 
-  // No session → send to login
+  // No session → 401 for API routes, redirect to login for pages
   if (!session) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

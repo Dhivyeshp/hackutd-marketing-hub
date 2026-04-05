@@ -26,11 +26,11 @@ export default function OverviewPanel({ previewMode = false }) {
   const [requests, setRequests] = useState([])
   const [loading, setLoading]   = useState(true)
 
-  async function load() {
+  async function load(refresh = false) {
     setLoading(true)
     const [tasksRes, reelsRes] = await Promise.all([
-      fetchTasks(),
-      fetchReels().catch(() => ({ reels: [] })),
+      fetchTasks(refresh),
+      fetchReels(refresh).catch(() => ({ reels: [] })),
     ])
     setTasks(tasksRes.tasks)
     setReels(reelsRes.reels)
@@ -73,7 +73,7 @@ export default function OverviewPanel({ previewMode = false }) {
             <p className="mt-1 text-sm text-muted-foreground">Live snapshot of team workload, deadlines, and approvals.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={load} disabled={loading}>
+            <Button variant="outline" onClick={() => load(true)} disabled={loading}>
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
               Refresh
             </Button>

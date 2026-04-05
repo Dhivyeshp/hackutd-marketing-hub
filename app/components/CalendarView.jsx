@@ -111,9 +111,9 @@ export default function CalendarView() {
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState(null)
 
-  async function load() {
+  async function load(refresh = false) {
     setLoading(true)
-    const response = await fetchTasks()
+    const response = await fetchTasks(refresh)
     setTasks(response.tasks.filter((task) => task.due))
     setPreview(response.preview)
     setLoading(false)
@@ -183,7 +183,7 @@ export default function CalendarView() {
             </p>
           </div>
 
-          <Button variant="outline" size="icon" onClick={load} disabled={loading} title="Refresh calendar" className="rounded-xl">
+          <Button variant="outline" size="icon" onClick={() => load(true)} disabled={loading} title="Refresh calendar" className="rounded-xl">
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
           </Button>
         </div>

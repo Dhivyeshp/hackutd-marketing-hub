@@ -261,12 +261,13 @@ export default function DraftsView() {
     toastRef.current = setTimeout(() => setToast(null), 3500)
   }
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
     setLoading(true)
     setError('')
     try {
+      const notionUrl = refresh ? '/api/notion?refresh=1' : '/api/notion'
       const [notionRes, usersRes] = await Promise.all([
-        fetch('/api/notion', { cache: 'no-store' }),
+        fetch(notionUrl, { cache: 'no-store' }),
         fetch('/api/users', { cache: 'no-store' }),
       ])
       const notionData = await notionRes.json()
@@ -392,7 +393,7 @@ export default function DraftsView() {
               Click any card for full details · Approve moves to next stage + creates ClickUp task
             </p>
           </div>
-          <Button variant="outline" size="icon" onClick={load} disabled={loading} className="rounded-xl">
+          <Button variant="outline" size="icon" onClick={() => load(true)} disabled={loading} className="rounded-xl">
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
           </Button>
         </div>

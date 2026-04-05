@@ -1,4 +1,16 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { cached, invalidate } from '@/lib/cache'
+
+function getSession() {
+  const raw = cookies().get('hub_session')?.value
+  if (!raw) return null
+  try {
+    const session = JSON.parse(raw)
+    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
+    return session
+  } catch { return null }
+}
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY
 const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID
@@ -142,42 +154,52 @@ async function fetchAllPages(dbId, statusPropName) {
   return pages
 }
 
-export async function GET() {
+const NOTION_DB_KEY = 'notion:db'
+const NOTION_TTL_MS = 60_000 // 60 seconds
+
+export async function GET(request) {
+  const session = getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'lead') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   if (!NOTION_API_KEY || !NOTION_DATABASE_ID) {
     return NextResponse.json({ error: 'Missing NOTION_API_KEY or NOTION_DATABASE_ID' }, { status: 500 })
   }
 
+  const { searchParams } = new URL(request.url)
+  if (searchParams.get('refresh') === '1') invalidate(NOTION_DB_KEY)
+
   try {
-    const { dbId, schemaData } = await resolveDbId(NOTION_DATABASE_ID)
-    const dbProps = schemaData.properties ?? {}
+    const result = await cached(NOTION_DB_KEY, NOTION_TTL_MS, async () => {
+      const { dbId, schemaData } = await resolveDbId(NOTION_DATABASE_ID)
+      const dbProps = schemaData.properties ?? {}
 
-    // Find status property
-    const statusEntry = Object.entries(dbProps).find(([, v]) => v.type === 'status')
-    const statusPropName = statusEntry?.[0] ?? null
-    if (!statusPropName) {
-      return NextResponse.json({ error: 'No status property found in database.' }, { status: 500 })
-    }
+      const statusEntry = Object.entries(dbProps).find(([, v]) => v.type === 'status')
+      const statusPropName = statusEntry?.[0] ?? null
+      if (!statusPropName) throw new Error('No status property found in database.')
 
-    // Build column list — title first, then alphabetical
-    const columns = Object.entries(dbProps)
-      .map(([name, def]) => ({ name, type: def.type }))
-      .sort((a, b) => {
-        if (a.type === 'title') return -1
-        if (b.type === 'title') return 1
-        return a.name.localeCompare(b.name)
+      const columns = Object.entries(dbProps)
+        .map(([name, def]) => ({ name, type: def.type }))
+        .sort((a, b) => {
+          if (a.type === 'title') return -1
+          if (b.type === 'title') return 1
+          return a.name.localeCompare(b.name)
+        })
+
+      const pages = await fetchAllPages(dbId, statusPropName)
+
+      const rows = pages.map(page => {
+        const props = {}
+        for (const { name } of columns) {
+          props[name] = getPropertyValue(page.properties[name])
+        }
+        return { id: page.id, notionUrl: page.url, properties: props }
       })
 
-    const pages = await fetchAllPages(dbId, statusPropName)
-
-    const rows = pages.map(page => {
-      const props = {}
-      for (const { name } of columns) {
-        props[name] = getPropertyValue(page.properties[name])
-      }
-      return { id: page.id, notionUrl: page.url, properties: props }
+      return { columns, rows, statusPropName }
     })
 
-    return NextResponse.json({ columns, rows, statusPropName })
+    return NextResponse.json(result)
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

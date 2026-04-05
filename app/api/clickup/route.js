@@ -1,4 +1,16 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { cached, invalidate } from '@/lib/cache'
+
+function getSession() {
+  const raw = cookies().get('hub_session')?.value
+  if (!raw) return null
+  try {
+    const session = JSON.parse(raw)
+    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
+    return session
+  } catch { return null }
+}
 
 const CLICKUP_API_KEY = process.env.CLICKUP_API_KEY
 const CLICKUP_LIST_ID = process.env.CLICKUP_LIST_ID
@@ -38,39 +50,37 @@ async function safeJson(response) {
   }
 }
 
-export async function GET() {
+const CLICKUP_TASKS_KEY = 'clickup:tasks'
+const CLICKUP_TTL_MS = 60_000 // 60 seconds
+
+export async function GET(request) {
+  const session = getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const missingEnvResponse = getMissingEnvResponse()
   if (missingEnvResponse) return missingEnvResponse
 
+  const { searchParams } = new URL(request.url)
+  if (searchParams.get('refresh') === '1') invalidate(CLICKUP_TASKS_KEY)
+
   try {
-    const res = await fetch(
-      `https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task?include_closed=false&page=0`,
-      {
-        headers: { Authorization: CLICKUP_API_KEY },
-        cache: 'no-store',
-      }
-    )
-
-    const data = await safeJson(res)
-
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: data?.err || data?.error || 'ClickUp API error' },
-        { status: res.status }
+    const tasks = await cached(CLICKUP_TASKS_KEY, CLICKUP_TTL_MS, async () => {
+      const res = await fetch(
+        `https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task?include_closed=false&page=0`,
+        { headers: { Authorization: CLICKUP_API_KEY } }
       )
-    }
-
-    const tasks = (data?.tasks ?? []).map((task) => ({
-      id: task.id,
-      title: task.name,
-      team: inferTeam(task.name, task.tags),
-      due: task.due_date
-        ? new Date(Number(task.due_date)).toISOString().split('T')[0]
-        : null,
-      assignees: (task.assignees ?? []).map(a => a.username || a.email || a.initials || '').filter(Boolean),
-      status: task.status?.status ?? 'open',
-      clickupUrl: task.url,
-    }))
+      const data = await safeJson(res)
+      if (!res.ok) throw new Error(data?.err || data?.error || 'ClickUp API error')
+      return (data?.tasks ?? []).map((task) => ({
+        id: task.id,
+        title: task.name,
+        team: inferTeam(task.name, task.tags),
+        due: task.due_date ? new Date(Number(task.due_date)).toISOString().split('T')[0] : null,
+        assignees: (task.assignees ?? []).map(a => a.username || a.email || a.initials || '').filter(Boolean),
+        status: task.status?.status ?? 'open',
+        clickupUrl: task.url,
+      }))
+    })
 
     return NextResponse.json({ tasks })
   } catch (err) {
@@ -79,6 +89,10 @@ export async function GET() {
 }
 
 export async function PATCH(request) {
+  const session = getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'lead') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const missingEnvResponse = getMissingEnvResponse()
   if (missingEnvResponse) return missingEnvResponse
 
@@ -124,6 +138,10 @@ export async function PATCH(request) {
 }
 
 export async function POST(request) {
+  const session = getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'lead') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const missingEnvResponse = getMissingEnvResponse()
   if (missingEnvResponse) return missingEnvResponse
 

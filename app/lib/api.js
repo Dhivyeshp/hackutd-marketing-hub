@@ -21,17 +21,19 @@ async function requestJson(url, options, fallbackMessage) {
   return data
 }
 
-export async function fetchTasks() {
+export async function fetchTasks(refresh = false) {
   try {
-    const data = await requestJson('/api/clickup', undefined, 'Failed to fetch tasks')
+    const url = refresh ? '/api/clickup?refresh=1' : '/api/clickup'
+    const data = await requestJson(url, undefined, 'Failed to fetch tasks')
     return { ...data, preview: false }
   } catch {
     return { tasks: cloneTasks(), preview: true }
   }
 }
 
-export async function fetchReels() {
-  const data = await requestJson('/api/notion', undefined, 'Failed to fetch reels')
+export async function fetchReels(refresh = false) {
+  const url = refresh ? '/api/notion?refresh=1' : '/api/notion'
+  const data = await requestJson(url, undefined, 'Failed to fetch reels')
   const reels = (data.rows ?? []).map(row => {
     const p = row.properties
     return {
@@ -47,8 +49,9 @@ export async function fetchReels() {
   return { reels, preview: false }
 }
 
-export async function fetchRoster() {
-  return requestJson('/api/roster', undefined, 'Failed to fetch roster')
+export async function fetchRoster(refresh = false) {
+  const url = refresh ? '/api/roster?refresh=1' : '/api/roster'
+  return requestJson(url, undefined, 'Failed to fetch roster')
 }
 
 export async function createClickUpTask({ title, team, due, assignee }) {

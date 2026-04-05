@@ -396,15 +396,15 @@ export default function TasksView() {
   const [teamFilter, setTeamFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
 
-  async function load() {
+  async function load(refresh = false) {
     setLoading(true)
 
-    const tasksResponse = await fetchTasks()
+    const tasksResponse = await fetchTasks(refresh)
     setTasks(tasksResponse.tasks)
     setPreview(tasksResponse.preview)
 
     try {
-      const rosterResponse = await fetchRoster()
+      const rosterResponse = await fetchRoster(refresh)
       setRoster(rosterResponse.members ?? [])
       setRosterError('')
     } catch (error) {
@@ -465,7 +465,7 @@ export default function TasksView() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={load} disabled={loading} title="Refresh tasks" className="rounded-xl">
+            <Button variant="outline" size="icon" onClick={() => load(true)} disabled={loading} title="Refresh tasks" className="rounded-xl">
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
             </Button>
             <AddTaskDialog onCreated={handleCreated} onPreview={(value) => setPreview(Boolean(value))} roster={roster} />
