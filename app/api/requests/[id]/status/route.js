@@ -39,10 +39,13 @@ export async function PATCH(request, { params }) {
     return Response.json({ error: 'Invalid request status' }, { status: 400 })
   }
 
-  if (!hasSupabaseAdminEnv()) {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const isSheetRequest = !UUID_RE.test(params.id)
+
+  if (!hasSupabaseAdminEnv() || isSheetRequest) {
     return Response.json({
       ok: true,
-      preview: true,
+      preview: isSheetRequest,
       request: formatRequestRecord({
         ...(body.request ?? {}),
         id: params.id,

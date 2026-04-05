@@ -56,6 +56,10 @@ module.exports = {
           muted: 'hsl(var(--sidebar-muted))',
           accent: 'hsl(var(--sidebar-accent))',
         },
+        scarlet: 'hsl(var(--scarlet) / <alpha-value>)',
+        violet: 'hsl(var(--purple) / <alpha-value>)',
+        'brand-orange': 'hsl(var(--orange) / <alpha-value>)',
+        'brand-amber': 'hsl(var(--amber) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'sans-serif'],

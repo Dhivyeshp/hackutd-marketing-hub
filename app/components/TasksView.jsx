@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, CheckSquare, ExternalLink, Plus, RefreshCw, TriangleAlert, UserPlus, X } from 'lucide-react'
+import { Check, CheckSquare, ExternalLink, Plus, RefreshCw, TriangleAlert, UserPlus, Users, X } from 'lucide-react'
 import { createClickUpTask, fetchRoster, fetchTasks } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -347,7 +347,7 @@ function AddTaskDialog({ onCreated, onPreview, roster }) {
             </Select>
             {teamMembers.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No roster members found for {getTeamLabel(team)} in the connected Google Sheet.
+                No members found for {getTeamLabel(team)}.
               </p>
             )}
           </div>
@@ -460,7 +460,7 @@ export default function TasksView() {
               {preview && <Badge variant="outline">Preview data</Badge>}
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Filter by team or status, add a new task, and suggest owners from the Google Sheets roster.
+              Filter by team or status, add a new task, and assign owners from the team roster.
             </p>
           </div>
 
@@ -585,7 +585,7 @@ export default function TasksView() {
             <div className="rounded-2xl border border-border bg-card p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Current mode</p>
               <div className="mt-4 space-y-3 text-sm text-muted-foreground">
-                <p>Sheet-driven assignee suggestions come from the connected Google Sheet tab.</p>
+                <p>Assignee suggestions come from the team roster in Supabase.</p>
                 <p>ClickUp tasks currently save the selected person as a suggested owner in the task payload, not as a native ClickUp assignee ID.</p>
               </div>
             </div>

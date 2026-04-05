@@ -74,6 +74,8 @@ async function createClickUpTask({ request, assignee }) {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function PATCH(request, { params }) {
   const session = getSession()
   if (!session) {
@@ -89,10 +91,11 @@ export async function PATCH(request, { params }) {
     return Response.json({ error: 'Select an assignee first' }, { status: 400 })
   }
 
+  const isSheetRequest = !UUID_RE.test(params.id)
   let requestRecord = null
   let assignee = null
 
-  if (hasSupabaseAdminEnv()) {
+  if (hasSupabaseAdminEnv() && !isSheetRequest) {
     const [{ data: requestData, error: requestError }, { data: assigneeData, error: assigneeError }] = await Promise.all([
       supabaseAdmin
         .from('requests')
@@ -122,25 +125,32 @@ export async function PATCH(request, { params }) {
     assignee = assigneeData
   } else {
     if (!body.request) {
-      return Response.json({ error: 'Missing request payload for preview mode' }, { status: 400 })
+      return Response.json({ error: 'Missing request payload' }, { status: 400 })
+    }
+
+    // For sheet-based requests, still look up the real assignee from Supabase if possible
+    if (hasSupabaseAdminEnv() && isSheetRequest) {
+      const { data: assigneeData } = await supabaseAdmin
+        .from('users')
+        .select('id, name, clickup_user_id')
+        .eq('id', body.assigned_to_user_id)
+        .single()
+      assignee = assigneeData ?? { id: body.assigned_to_user_id, name: body.assignee_name ?? '', clickup_user_id: null }
+    } else {
+      assignee = { id: body.assigned_to_user_id, name: body.assignee_name ?? '', clickup_user_id: null }
     }
 
     requestRecord = formatRequestRecord({
       ...body.request,
       id: params.id,
       assignedToUserId: body.assigned_to_user_id,
-      assigneeName: body.assignee_name ?? '',
+      assigneeName: assignee.name,
     })
-    assignee = {
-      id: body.assigned_to_user_id,
-      name: body.assignee_name ?? '',
-      clickup_user_id: null,
-    }
   }
 
   const task = await createClickUpTask({ request: requestRecord, assignee })
 
-  if (!hasSupabaseAdminEnv()) {
+  if (!hasSupabaseAdminEnv() || isSheetRequest) {
     return Response.json({
       ok: true,
       preview: task.preview,

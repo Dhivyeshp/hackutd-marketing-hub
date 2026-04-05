@@ -134,10 +134,7 @@ export async function GET() {
     }
 
     const requests = await loadRequestsFromSheets()
-    const warning = hasSupabaseAdminEnv()
-      ? 'Showing data from Google Sheet. New form submissions require GAS_SECRET to be configured.'
-      : null
-    return Response.json({ requests, source: 'sheets', ...(warning && { warning }) })
+    return Response.json({ requests, source: 'sheets' })
   } catch (error) {
     return Response.json({ requests: getPreviewRequests(), source: 'preview', warning: error.message })
   }

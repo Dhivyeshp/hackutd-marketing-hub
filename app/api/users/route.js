@@ -31,7 +31,7 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url)
   const team = normalizeTeam(searchParams.get('team') ?? '')
-  const role = searchParams.get('role') ?? 'member'
+  const role = searchParams.get('role') ?? ''
 
   if (!hasSupabaseAdminEnv()) {
     const users = getDefaultAssignableUsers(team)

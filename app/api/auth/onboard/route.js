@@ -1,18 +1,14 @@
 import { hasSupabaseAdminEnv, supabaseAdmin } from '@/lib/supabase-server'
-
-const isDev = process.env.NODE_ENV !== 'production'
+import { cookies } from 'next/headers'
+import bcrypt from 'bcryptjs'
 
 export async function POST(request) {
   if (!hasSupabaseAdminEnv || !supabaseAdmin) {
-    return Response.json(
-      { error: 'Supabase server env is missing. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Server configuration error.' }, { status: 500 })
   }
 
-  const { name, email, team, clickup_email, invite_code } = await request.json()
+  const { name, email, team, clickup_email, invite_code, password } = await request.json()
 
-  // Validate invite code
   if (invite_code !== process.env.INVITE_CODE) {
     return Response.json({ error: 'Invalid invite code' }, { status: 401 })
   }
@@ -21,7 +17,10 @@ export async function POST(request) {
     return Response.json({ error: 'Name, email, and team are required' }, { status: 400 })
   }
 
-  // Check if already exists
+  if (!password) {
+    return Response.json({ error: 'Password is required' }, { status: 400 })
+  }
+
   const { data: existing } = await supabaseAdmin
     .from('users')
     .select('id')
@@ -52,7 +51,8 @@ export async function POST(request) {
     if (!clickup_user_id) clickupWarning = true
   }
 
-  // Insert user
+  const password_hash = await bcrypt.hash(password, 10)
+
   const { data: user, error } = await supabaseAdmin
     .from('users')
     .insert({
@@ -61,6 +61,7 @@ export async function POST(request) {
       role: 'member',
       team,
       clickup_user_id,
+      password_hash,
     })
     .select('id, name, email, role, team')
     .single()
@@ -69,41 +70,22 @@ export async function POST(request) {
     return Response.json({ error: error.message }, { status: 500 })
   }
 
-  // Generate + send login code
-  const code = Math.floor(100000 + Math.random() * 900000).toString()
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-
-  await supabaseAdmin
-    .from('users')
-    .update({ login_code: code, code_expires_at: expiresAt })
-    .eq('id', user.id)
-
-  // Log to terminal for dev testing
-  console.log(`[ONBOARD CODE] ${email} → ${code}`)
-
-  if (process.env.RESEND_API_KEY) {
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.RESEND_FROM_EMAIL || 'hub@hackutd.com',
-        to: email,
-        subject: 'Welcome to HackUTD Marketing Hub — verify your email',
-        html: `
-          <p>Welcome, ${name}! Your login code is:</p>
-          <h1 style="font-size:48px;letter-spacing:8px;font-family:monospace">${code}</h1>
-          <p>This code expires in 10 minutes.</p>
-        `,
-      }),
-    })
+  const session = {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    team: user.team,
+    createdAt: Date.now(),
   }
 
-  return Response.json({
-    sent: true,
-    clickupWarning,
-    devCode: !process.env.RESEND_API_KEY && isDev ? code : undefined,
+  cookies().set('hub_session', JSON.stringify(session), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 30,
+    path: '/',
   })
+
+  return Response.json({ role: user.role, clickupWarning })
 }

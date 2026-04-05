@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TEAM_COLORS } from '@/lib/marketing'
-import { DEFAULT_REQUEST_ASSIGNEES, REQUEST_COLUMNS, getRequestBoardStatus } from '@/lib/requests'
+import { REQUEST_COLUMNS, getRequestBoardStatus } from '@/lib/requests'
 import { cn } from '@/lib/utils'
 
 const COLUMN_META = {
@@ -26,11 +26,6 @@ function formatDue(dateString) {
   })
 }
 
-function getTeamAssignees(team, users) {
-  const filtered = users.filter(user => user.team === team)
-  if (filtered.length > 0) return filtered
-  return DEFAULT_REQUEST_ASSIGNEES[team] ?? []
-}
 
 function RequestCard({
   request,
@@ -206,7 +201,7 @@ export default function RequestsView() {
     try {
       const [requestsRes, usersRes] = await Promise.all([
         fetch('/api/requests', { cache: 'no-store' }),
-        fetch('/api/users?role=member', { cache: 'no-store' }),
+        fetch('/api/users', { cache: 'no-store' }),
       ])
 
       const requestsData = await requestsRes.json()
@@ -241,9 +236,7 @@ export default function RequestsView() {
   }
 
   function handleAssign(id, assignedToUserId) {
-    const assignee = usersById[assignedToUserId] ?? Object.values(DEFAULT_REQUEST_ASSIGNEES)
-      .flat()
-      .find(user => user.id === assignedToUserId)
+    const assignee = usersById[assignedToUserId]
 
     updateRequest(id, {
       assignedToUserId,
@@ -377,7 +370,7 @@ export default function RequestsView() {
                   <RequestCard
                     key={request.id}
                     request={request}
-                    assigneeOptions={getTeamAssignees(request.team, assignableUsers)}
+                    assigneeOptions={assignableUsers}
                     moving={Boolean(moving[request.id])}
                     onAssign={handleAssign}
                     onApprove={handleApprove}

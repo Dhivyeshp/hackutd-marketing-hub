@@ -1,12 +1,96 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw, X, ExternalLink, Calendar, Users } from 'lucide-react'
 import { fetchTasks } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDateLabel, getTeamLabel, TEAM_COLORS } from '@/lib/marketing'
 import { cn } from '@/lib/utils'
+
+function TaskModal({ task, onClose }) {
+  const colors = TEAM_COLORS[task.team] ?? TEAM_COLORS.design
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className={cn('flex items-center justify-between px-5 py-4', colors.bg)}>
+          <div className="flex items-center gap-2">
+            <span className={cn('h-2.5 w-2.5 rounded-full', colors.dot)} />
+            <span className={cn('text-xs font-semibold uppercase tracking-wide', colors.text)}>
+              {getTeamLabel(task.team)}
+            </span>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 hover:bg-black/10 transition-colors">
+            <X className={cn('h-4 w-4', colors.text)} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-foreground leading-snug">{task.title}</h2>
+
+          <div className="grid gap-3">
+            <div className="flex items-center gap-3 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <span className="text-muted-foreground">Due</span>
+              <span className="font-medium text-foreground">
+                {formatDateLabel(task.due, { month: 'long', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+
+            {task.status && (
+              <div className="flex items-center gap-3 text-sm">
+                <span className="h-4 w-4 flex-shrink-0" />
+                <span className="text-muted-foreground">Status</span>
+                <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground capitalize">
+                  {task.status}
+                </span>
+              </div>
+            )}
+
+            {task.assignees?.length > 0 && (
+              <div className="flex items-start gap-3 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                <span className="text-muted-foreground">Assignees</span>
+                <div className="flex flex-wrap gap-1">
+                  {task.assignees.map((name, i) => (
+                    <span key={i} className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {task.clickupUrl && (
+            <a
+              href={task.clickupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm font-medium text-secondary-foreground hover:bg-accent transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open in ClickUp
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -25,6 +109,7 @@ export default function CalendarView() {
   const [tasks, setTasks] = useState([])
   const [preview, setPreview] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -85,6 +170,7 @@ export default function CalendarView() {
 
   return (
     <div className="space-y-5">
+      {selectedTask && <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />}
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex flex-col gap-4 border-b border-border px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -159,8 +245,9 @@ export default function CalendarView() {
                           return (
                             <div
                               key={task.id}
-                              className={cn('rounded-lg px-1.5 py-1', colors.bg)}
+                              className={cn('cursor-pointer rounded-lg px-1.5 py-1 hover:opacity-80 transition-opacity', colors.bg)}
                               title={task.title}
+                              onClick={() => setSelectedTask(task)}
                             >
                               <div className="flex items-center gap-1">
                                 <span className={cn('h-1.5 w-1.5 flex-shrink-0 rounded-full', colors.dot)} />
@@ -216,7 +303,7 @@ export default function CalendarView() {
                   const colors = TEAM_COLORS[task.team] ?? TEAM_COLORS.design
 
                   return (
-                    <div key={task.id} className="flex items-center gap-3 rounded-2xl border border-border px-4 py-3">
+                    <div key={task.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border px-4 py-3 hover:bg-accent/60 transition-colors" onClick={() => setSelectedTask(task)}>
                       <span className={cn('h-2.5 w-2.5 rounded-full', colors.dot)} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">{task.title}</p>

@@ -32,7 +32,19 @@ export async function fetchTasks() {
 
 export async function fetchReels() {
   const data = await requestJson('/api/notion', undefined, 'Failed to fetch reels')
-  return { ...data, preview: false }
+  const reels = (data.rows ?? []).map(row => {
+    const p = row.properties
+    return {
+      id: row.id,
+      notionUrl: row.notionUrl,
+      title:  p['Video Title'] || p['Title'] || p['Name'] || Object.values(p).find(Boolean) || 'Untitled',
+      filmer: p['Filmer/Editor'] || p['Filmer'] || '',
+      story:  p['Storyboarder/Ideator'] || p['Storyboarder'] || '',
+      type:   p['Type'] || '',
+      status: p['Status'] || p['Progress'] || p['Stage'] || p['State'] || '',
+    }
+  })
+  return { reels, preview: false }
 }
 
 export async function fetchRoster() {

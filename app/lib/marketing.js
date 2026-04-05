@@ -1,8 +1,8 @@
 export const TEAM_COLORS = {
-  design:   { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200', dot: 'bg-orange-400' },
-  uiux:     { bg: 'bg-blue-100',   text: 'text-blue-800',   border: 'border-blue-200',   dot: 'bg-blue-400' },
-  outreach: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', dot: 'bg-emerald-400' },
-  content:  { bg: 'bg-amber-100',  text: 'text-amber-800',  border: 'border-amber-200',  dot: 'bg-amber-400' },
+  design:   { bg: 'bg-scarlet/10',      text: 'text-scarlet',      border: 'border-scarlet/25',      dot: 'bg-scarlet' },
+  uiux:     { bg: 'bg-violet/10',       text: 'text-violet',       border: 'border-violet/25',       dot: 'bg-violet' },
+  outreach: { bg: 'bg-brand-orange/10', text: 'text-brand-orange', border: 'border-brand-orange/25', dot: 'bg-brand-orange' },
+  content:  { bg: 'bg-brand-amber/10',  text: 'text-brand-amber',  border: 'border-brand-amber/25',  dot: 'bg-brand-amber' },
 }
 
 export const TEAM_LABELS = {
