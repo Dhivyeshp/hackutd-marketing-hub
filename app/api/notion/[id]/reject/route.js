@@ -1,16 +1,4 @@
-import { cookies } from 'next/headers'
-
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch {
-    return null
-  }
-}
+import { getSession } from '@/lib/session'
 
 async function resolveStatusPropName(pageId) {
   const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {

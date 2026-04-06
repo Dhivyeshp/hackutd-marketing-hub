@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 
-const SHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '1WYP6mtncXyEonhJZtBYxj9vqdI7vdR4PEvXcYbxn42Q'
+const SHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
 const SHEET_RANGE = 'Hack Marketing Request From (Responses)'
 
 const GOOGLE_SHEETS_CLIENT_EMAIL = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
 const GOOGLE_SHEETS_PRIVATE_KEY = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n')
 
 export async function GET() {
-  if (!GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY) {
+  if (!SHEET_ID || !GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY) {
     return NextResponse.json({ error: 'Missing Google Sheets credentials' }, { status: 500 })
   }
 
@@ -35,7 +35,6 @@ export async function GET() {
     }
     const meta = await metaRes.json()
     const availableSheets = meta.sheets ?? []
-    console.log('[sheets] available tabs:', availableSheets.map(s => s.properties.title))
 
     // Find matching sheet by name (case-insensitive), fall back to first sheet
     const target = availableSheets.find(
@@ -47,7 +46,6 @@ export async function GET() {
     }
 
     const title = target.properties.title
-    console.log('[sheets] using title:', title)
 
     const dataRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(title)}`,

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  Calendar, CheckSquare, ChevronLeft, ChevronRight,
-  ExternalLink, FileText, FolderOpen, LayoutDashboard,
-  LogOut, Video,
+  Calendar, CheckSquare, ChevronDown, ChevronLeft, ChevronRight,
+  ExternalLink, File, FileSpreadsheet, FileText, FileVideo,
+  FolderOpen, Image, LayoutDashboard, Loader2, LogOut, Video,
 } from 'lucide-react'
 import CalendarView from './CalendarView'
 import DraftsView from './DraftsView'
@@ -25,6 +25,133 @@ const NAV = [
 ]
 
 const SIDEBAR_LINKS = QUICK_LINKS.filter(l => !l.name.includes('Notion'))
+
+const DRIVE_ROOT_ID = '1bI-2T5k91Hu7s-RtdiFXjuqeCxMzi3DD'
+
+const FILE_ICONS = {
+  folder: FolderOpen,
+  doc:    FileText,
+  sheet:  FileSpreadsheet,
+  slide:  FileText,
+  video:  FileVideo,
+  image:  Image,
+  pdf:    FileText,
+  file:   File,
+}
+
+function DriveItem({ item, depth = 0 }) {
+  const [open, setOpen]     = useState(false)
+  const [files, setFiles]   = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  async function toggle() {
+    if (!item.isFolder) return
+    if (!open && files === null) {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/drive?folderId=${item.id}`)
+        const data = await res.json()
+        setFiles(data.files ?? [])
+      } catch {
+        setFiles([])
+      }
+      setLoading(false)
+    }
+    setOpen(o => !o)
+  }
+
+  const Icon = FILE_ICONS[item.icon] ?? File
+  const indent = depth * 12
+
+  if (item.isFolder) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={toggle}
+          className="group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition hover:bg-sidebar-accent"
+          style={{ paddingLeft: `${8 + indent}px` }}
+        >
+          {loading
+            ? <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-sidebar-muted" />
+            : <ChevronRight className={cn('h-3 w-3 flex-shrink-0 text-sidebar-muted transition-transform', open && 'rotate-90')} />
+          }
+          <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-sidebar-muted" />
+          <span className="truncate text-xs text-sidebar-foreground">{item.name}</span>
+        </button>
+        {open && files !== null && (
+          <div>
+            {files.length === 0
+              ? <p className="py-1 text-[11px] text-sidebar-muted" style={{ paddingLeft: `${24 + indent}px` }}>Empty</p>
+              : files.map(child => <DriveItem key={child.id} item={child} depth={depth + 1} />)
+            }
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition hover:bg-sidebar-accent"
+      style={{ paddingLeft: `${20 + indent}px` }}
+    >
+      <Icon className="h-3 w-3 flex-shrink-0 text-sidebar-muted" />
+      <span className="truncate text-xs text-sidebar-foreground">{item.name}</span>
+      <ExternalLink className="ml-auto h-2.5 w-2.5 flex-shrink-0 opacity-0 text-sidebar-muted group-hover:opacity-100" />
+    </a>
+  )
+}
+
+function DriveSidebar() {
+  const [open, setOpen]     = useState(false)
+  const [files, setFiles]   = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  async function toggle() {
+    if (!open && files === null) {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/drive?folderId=${DRIVE_ROOT_ID}`)
+        const data = await res.json()
+        setFiles(data.files ?? [])
+      } catch {
+        setFiles([])
+      }
+      setLoading(false)
+    }
+    setOpen(o => !o)
+  }
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition text-sidebar-foreground hover:bg-sidebar-accent"
+      >
+        <FolderOpen className="h-4 w-4 flex-shrink-0" />
+        <span className="flex-1 text-sm font-medium">Marketing Drive</span>
+        {loading
+          ? <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-sidebar-muted" />
+          : <ChevronDown className={cn('h-3.5 w-3.5 flex-shrink-0 text-sidebar-muted transition-transform', !open && '-rotate-90')} />
+        }
+      </button>
+
+      {open && files !== null && (
+        <div className="mt-0.5 ml-1">
+          {files.length === 0
+            ? <p className="px-3 py-2 text-[11px] text-sidebar-muted">No files found</p>
+            : files.map(item => <DriveItem key={item.id} item={item} depth={0} />)
+          }
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Avatar({ name, size = 'sm', color = 'bg-gray-500' }) {
   const initials = name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()

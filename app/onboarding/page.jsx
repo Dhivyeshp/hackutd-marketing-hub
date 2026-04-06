@@ -15,7 +15,7 @@ function OnboardingForm() {
     name: '',
     email: emailParam,
     team: '',
-    clickup_email: '',
+    clickup_user_id: '',
     invite_code: '',
     password: '',
     confirm: '',
@@ -45,7 +45,7 @@ function OnboardingForm() {
         name: form.name,
         email: form.email,
         team: form.team,
-        clickup_email: form.clickup_email,
+        clickup_user_id: form.clickup_user_id,
         invite_code: form.invite_code,
         password: form.password,
       }),
@@ -106,13 +106,18 @@ function OnboardingForm() {
               <option value="">Select your team…</option>
               {TEAMS.map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
             </select>
-            <input
-              type="email"
-              placeholder="ClickUp email (optional)"
-              value={form.clickup_email}
-              onChange={set('clickup_email')}
-              className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <div className="space-y-1">
+              <input
+                type="text"
+                placeholder="ClickUp user ID (optional)"
+                value={form.clickup_user_id}
+                onChange={set('clickup_user_id')}
+                className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <p className="px-1 text-[11px] text-muted-foreground">
+                Find in ClickUp → avatar → Profile → numeric ID in the URL
+              </p>
+            </div>
             <input
               type="password"
               placeholder="Password"

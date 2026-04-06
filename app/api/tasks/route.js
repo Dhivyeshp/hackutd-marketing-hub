@@ -1,12 +1,5 @@
 import { hasSupabaseAdminEnv, supabaseAdmin } from '@/lib/supabase-server'
-import { cookies } from 'next/headers'
-
-function getSession(req) {
-  const cookieStore = cookies()
-  const raw = cookieStore.get('hub_session')?.value
-  if (!raw) return null
-  try { return JSON.parse(raw) } catch { return null }
-}
+import { getSession } from '@/lib/session'
 
 export async function GET(request) {
   if (!hasSupabaseAdminEnv || !supabaseAdmin) {
@@ -16,7 +9,7 @@ export async function GET(request) {
     )
   }
 
-  const session = getSession(request)
+  const session = getSession()
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)

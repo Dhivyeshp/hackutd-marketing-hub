@@ -62,8 +62,7 @@ create table users (
   role text not null check (role in ('lead', 'member')),
   team text check (team in ('design', 'uiux', 'outreach', 'content')),
   clickup_user_id text,
-  login_code text,
-  code_expires_at timestamptz,
+  password_hash text,
   onboarded_at timestamptz default now(),
   created_at timestamptz default now()
 );
@@ -93,7 +92,8 @@ create table checkins (
   week_of date not null,
   status text check (status in ('on_track', 'needs_help', 'blocked')),
   note text,
-  submitted_at timestamptz default now()
+  submitted_at timestamptz default now(),
+  unique (user_id, week_of)
 );
 
 -- Internal notes on requests (before approval)
@@ -108,12 +108,18 @@ create table notes (
 
 ### 3. Seed the lead account manually
 
-```sql
-insert into users (name, email, role)
-values ('Your Name', 'youremail@utdallas.edu', 'lead');
+Auth uses bcrypt password hashing. Generate a hash for the lead password:
+```bash
+node -e "const b=require('bcryptjs'); b.hash('yourpassword', 10).then(h => console.log(h))"
 ```
 
-Everyone else self-onboards via the invite code flow.
+Then insert:
+```sql
+insert into users (name, email, role, password_hash)
+values ('Your Name', 'youremail@utdallas.edu', 'lead', '<bcrypt_hash_here>');
+```
+
+Everyone else self-onboards via the invite code + password flow on /login → Create account.
 
 ### 4. Get your keys
 

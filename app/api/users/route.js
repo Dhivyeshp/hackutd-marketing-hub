@@ -1,19 +1,7 @@
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/session'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { getDefaultAssignableUsers, normalizeTeam } from '@/lib/requests'
 
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch {
-    return null
-  }
-}
 
 function hasSupabaseAdminEnv() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)

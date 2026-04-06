@@ -1,16 +1,7 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/session'
 import { cached, invalidate } from '@/lib/cache'
 
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch { return null }
-}
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY
 const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID
@@ -160,7 +151,9 @@ const NOTION_TTL_MS = 60_000 // 60 seconds
 export async function GET(request) {
   const session = getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.role !== 'lead') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (session.role !== 'lead' && session.team !== 'content') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   if (!NOTION_API_KEY || !NOTION_DATABASE_ID) {
     return NextResponse.json({ error: 'Missing NOTION_API_KEY or NOTION_DATABASE_ID' }, { status: 500 })

@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/session'
 import { hasSupabaseAdminEnv, supabaseAdmin } from '@/lib/supabase-server'
 import { cached, invalidate } from '@/lib/cache'
 
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch { return null }
-}
 
 const ROSTER_KEY = 'roster:members'
 const ROSTER_TTL_MS = 5 * 60_000 // 5 minutes

@@ -1,15 +1,6 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/session'
 
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch { return null }
-}
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY
 const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID

@@ -1,16 +1,7 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/session'
 import { cached, invalidate } from '@/lib/cache'
 
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch { return null }
-}
 
 const CLICKUP_API_KEY = process.env.CLICKUP_API_KEY
 const CLICKUP_LIST_ID = process.env.CLICKUP_LIST_ID
@@ -65,19 +56,32 @@ export async function GET(request) {
 
   try {
     const tasks = await cached(CLICKUP_TASKS_KEY, CLICKUP_TTL_MS, async () => {
-      const res = await fetch(
-        `https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task?include_closed=false&page=0`,
-        { headers: { Authorization: CLICKUP_API_KEY } }
-      )
-      const data = await safeJson(res)
-      if (!res.ok) throw new Error(data?.err || data?.error || 'ClickUp API error')
-      return (data?.tasks ?? []).map((task) => ({
+      const allTasks = []
+      let page = 0
+
+      while (page < 20) {
+        const res = await fetch(
+          `https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task?include_closed=true&page=${page}`,
+          { headers: { Authorization: CLICKUP_API_KEY } }
+        )
+        const data = await safeJson(res)
+        if (!res.ok) throw new Error(data?.err || data?.error || 'ClickUp API error')
+
+        const pageTasks = data?.tasks ?? []
+        allTasks.push(...pageTasks)
+
+        // last_page: true = done; last_page: false = more pages
+        if (data?.last_page !== false || pageTasks.length === 0) break
+        page++
+      }
+
+      return allTasks.map((task) => ({
         id: task.id,
         title: task.name,
         team: inferTeam(task.name, task.tags),
         due: task.due_date ? new Date(Number(task.due_date)).toISOString().split('T')[0] : null,
         assignees: (task.assignees ?? []).map(a => a.username || a.email || a.initials || '').filter(Boolean),
-        status: task.status?.status ?? 'open',
+        status: task.status?.status ?? 'to do',
         clickupUrl: task.url,
       }))
     })

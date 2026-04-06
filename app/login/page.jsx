@@ -14,7 +14,7 @@ function LoginForm() {
 
   const [signIn, setSignIn] = useState({ email: '', password: '' })
   const [signUp, setSignUp] = useState({
-    name: '', email: '', team: '', clickup_email: '', invite_code: '', password: '', confirm: '',
+    name: '', email: '', team: '', clickup_user_id: '', invite_code: '', password: '', confirm: '',
   })
 
   function setSignInField(field) {
@@ -64,7 +64,7 @@ function LoginForm() {
         name: signUp.name,
         email: signUp.email,
         team: signUp.team,
-        clickup_email: signUp.clickup_email,
+        clickup_user_id: signUp.clickup_user_id,
         invite_code: signUp.invite_code,
         password: signUp.password,
       }),
@@ -177,13 +177,18 @@ function LoginForm() {
                 <option value="">Select your team…</option>
                 {TEAMS.map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
               </select>
-              <input
-                type="email"
-                placeholder="ClickUp email (optional)"
-                value={signUp.clickup_email}
-                onChange={setSignUpField('clickup_email')}
-                className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  placeholder="ClickUp user ID (optional)"
+                  value={signUp.clickup_user_id}
+                  onChange={setSignUpField('clickup_user_id')}
+                  className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <p className="px-1 text-[11px] text-muted-foreground">
+                  Find in ClickUp → avatar → Profile → numeric ID in the URL
+                </p>
+              </div>
               <input
                 type="password"
                 placeholder="Password"

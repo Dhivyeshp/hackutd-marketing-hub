@@ -1,5 +1,5 @@
 import { google } from 'googleapis'
-import { cookies } from 'next/headers'
+import { getSession, safeCompare } from '@/lib/session'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import {
   formatRequestRecord,
@@ -9,18 +9,6 @@ import {
   normalizeTeam,
 } from '@/lib/requests'
 
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch {
-    return null
-  }
-}
 
 function hasSupabaseAdminEnv() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -147,7 +135,7 @@ export async function POST(request) {
     return Response.json({ error: 'Missing GAS_SECRET' }, { status: 500 })
   }
 
-  if (getGasSecret(request) !== configuredSecret) {
+  if (!safeCompare(getGasSecret(request), configuredSecret)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

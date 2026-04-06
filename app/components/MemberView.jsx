@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import {
+  Calendar,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
@@ -11,11 +12,14 @@ import {
   Layers3,
   LogOut,
   Square,
+  Video,
 } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { DRIVE_ROOT, QUICK_LINKS, TEAM_COLORS, TEAM_LABELS } from '@/lib/marketing'
 import { cn } from '@/lib/utils'
+import ContentReelsView from '@/components/ContentReelsView'
+import CalendarView from '@/components/CalendarView'
 
 const QUICK_ACCESS = {
   design: [
@@ -42,11 +46,14 @@ const QUICK_ACCESS = {
   ],
 }
 
-const MEMBER_NAV = [
-  { id: 'home', label: 'Home', Icon: LayoutDashboard },
+const BASE_NAV = [
+  { id: 'home',     label: 'Home',     Icon: LayoutDashboard },
   { id: 'my-tasks', label: 'My Tasks', Icon: CheckSquare },
+  { id: 'calendar', label: 'Calendar', Icon: Calendar },
   { id: 'org-view', label: 'Org View', Icon: Layers3 },
 ]
+
+const CONTENT_NAV = { id: 'reels', label: 'Reels', Icon: Video }
 
 const TEAM_ORDER = ['design', 'uiux', 'content', 'outreach']
 const SIDEBAR_LINKS = QUICK_LINKS
@@ -269,6 +276,7 @@ export default function MemberView({ user, onSignOut }) {
   const colors = TEAM_COLORS[user.team] ?? TEAM_COLORS.design
   const links = QUICK_ACCESS[user.team] ?? []
   const firstName = user.name?.split(' ')[0] ?? 'there'
+  const MEMBER_NAV = user.team === 'content' ? [...BASE_NAV, CONTENT_NAV] : BASE_NAV
   const activeLabel = MEMBER_NAV.find(item => item.id === activeView)?.label ?? 'Home'
 
   return (
@@ -442,6 +450,8 @@ export default function MemberView({ user, onSignOut }) {
           {activeView === 'org-view' && (
             <OrgViewPanel orgTasks={orgTasks} orgLoading={orgLoading} />
           )}
+          {activeView === 'calendar' && <CalendarView />}
+          {activeView === 'reels' && <ContentReelsView />}
         </main>
       </div>
     </div>

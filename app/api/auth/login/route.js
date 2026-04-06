@@ -1,5 +1,5 @@
 import { hasSupabaseAdminEnv, supabaseAdmin } from '@/lib/supabase-server'
-import { cookies } from 'next/headers'
+import { setSession } from '@/lib/session'
 import bcrypt from 'bcryptjs'
 
 export async function POST(request) {
@@ -24,7 +24,7 @@ export async function POST(request) {
   }
 
   if (!user.password_hash) {
-    return Response.json({ error: 'No password set for this account. Please sign up again.' }, { status: 401 })
+    return Response.json({ error: 'Invalid email or password' }, { status: 401 })
   }
 
   const valid = await bcrypt.compare(password, user.password_hash)
@@ -41,13 +41,7 @@ export async function POST(request) {
     createdAt: Date.now(),
   }
 
-  cookies().set('hub_session', JSON.stringify(session), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30,
-    path: '/',
-  })
+  setSession(session)
 
   return Response.json({ role: user.role })
 }

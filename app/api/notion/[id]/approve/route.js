@@ -1,14 +1,4 @@
-import { cookies } from 'next/headers'
-
-function getSession() {
-  const raw = cookies().get('hub_session')?.value
-  if (!raw) return null
-  try {
-    const session = JSON.parse(raw)
-    if (Date.now() - session.createdAt > 30 * 24 * 60 * 60 * 1000) return null
-    return session
-  } catch { return null }
-}
+import { getSession } from '@/lib/session'
 
 async function resolveStatusPropName(pageId) {
   const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
@@ -50,7 +40,6 @@ async function createClickUpFilmTask(title, clickupUserIds = []) {
   if (clickupUserIds.length > 0) {
     // ClickUp expects integer user IDs — parse as int, filter out NaN/0
     payload.assignees = clickupUserIds.map(id => parseInt(id, 10)).filter(id => id > 0)
-    console.log('[approve] ClickUp assignees payload:', payload.assignees)
   }
 
   const res = await fetch(
@@ -66,7 +55,6 @@ async function createClickUpFilmTask(title, clickupUserIds = []) {
   )
   const data = await res.json().catch(() => null)
   if (!res.ok) throw new Error(data?.err || data?.error || 'ClickUp task creation failed')
-  console.log('[approve] ClickUp task created:', data?.id, 'assignees:', payload.assignees)
   return data?.id ?? null
 }
 
@@ -88,7 +76,6 @@ export async function PATCH(request, { params }) {
       .select('clickup_user_id')
       .in('id', assigneeIds)
     clickupUserIds = (data ?? []).map(u => u.clickup_user_id).filter(Boolean)
-    console.log('[approve] assigneeIds:', assigneeIds, '→ clickup_user_ids:', clickupUserIds)
   }
 
   const statusToSet = nextStatus || 'Approved'
