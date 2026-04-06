@@ -55,7 +55,6 @@ const BASE_NAV = [
 
 const CONTENT_NAV = { id: 'reels', label: 'Reels', Icon: Video }
 
-const TEAM_ORDER = ['design', 'uiux', 'content', 'outreach']
 const SIDEBAR_LINKS = QUICK_LINKS
 
 function formatDue(dateStr) {
@@ -185,42 +184,36 @@ function MyTasksPanel({ tasks, loading, onToggle }) {
 }
 
 function OrgViewPanel({ orgTasks, orgLoading }) {
+  const activeTasks = orgTasks.filter(t => t.status !== 'complete' && t.status !== 'closed')
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Org View</h1>
-        <p className="mt-1 text-sm text-muted-foreground">A read-only snapshot of what each team is actively working on.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {orgLoading ? 'Loading…' : `${activeTasks.length} active task${activeTasks.length !== 1 ? 's' : ''} across the team`}
+        </p>
       </div>
 
       {orgLoading ? (
         <div className="flex justify-center py-10">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
         </div>
+      ) : activeTasks.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">No active tasks.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {TEAM_ORDER.map(team => {
-            const teamTasks = orgTasks.filter(task => task.team === team && task.status !== 'complete' && task.status !== 'closed')
-            const teamColors = TEAM_COLORS[team]
-
-            return (
-              <div key={team} className="space-y-2">
-                <p className={cn('rounded-md px-2 py-1 text-center text-[11px] font-semibold', teamColors.bg, teamColors.text)}>
-                  {TEAM_LABELS[team]}
-                </p>
-                <div className="space-y-1.5">
-                  {teamTasks.length === 0 && (
-                    <p className="py-2 text-center text-xs text-muted-foreground">-</p>
-                  )}
-                  {teamTasks.map(task => (
-                    <div key={task.id} className="rounded-lg border border-border bg-card px-2.5 py-2 text-xs text-foreground">
-                      <p className="line-clamp-2 font-medium leading-snug">{task.title}</p>
-                      {task.due && <p className="mt-1 text-muted-foreground">{formatDue(task.due)}</p>}
-                    </div>
-                  ))}
-                </div>
+        <div className="space-y-1.5">
+          {activeTasks.map(task => (
+            <div key={task.id} className="flex items-start justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
+              <p className="text-sm font-medium text-foreground leading-snug">{task.title}</p>
+              <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                {task.assignees.length > 0 && (
+                  <span>{task.assignees.join(', ')}</span>
+                )}
+                {task.due && <span className="tabular-nums">{formatDue(task.due)}</span>}
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>

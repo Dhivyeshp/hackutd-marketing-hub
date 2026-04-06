@@ -13,14 +13,15 @@ export async function GET() {
 
   const { tasks } = await res.json()
 
-  const mapped = (tasks ?? []).map(t => ({
-    id: t.id,
-    title: t.name,
-    status: t.status?.status ?? 'open',
-    due: t.due_date ? new Date(Number(t.due_date)).toISOString().split('T')[0] : null,
-    team: t.tags?.[0]?.name ?? null,
-    assignees: (t.assignees ?? []).map(a => a.username || a.initials || '').filter(Boolean),
-  }))
+  const mapped = (tasks ?? [])
+    .filter(t => t.assignees?.length > 0)
+    .map(t => ({
+      id: t.id,
+      title: t.name,
+      status: t.status?.status ?? 'open',
+      due: t.due_date ? new Date(Number(t.due_date)).toISOString().split('T')[0] : null,
+      assignees: t.assignees.map(a => a.username || a.initials || '').filter(Boolean),
+    }))
 
   return Response.json({ tasks: mapped })
 }
