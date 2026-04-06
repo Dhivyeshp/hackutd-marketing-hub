@@ -4,28 +4,16 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 
-const TEAMS = ['Design', 'UI/UX', 'Content', 'Outreach']
-
 function LoginForm() {
   const router = useRouter()
-  const [tab, setTab] = useState('signin')
+  const [mode, setMode] = useState('password') // 'password' | 'magic'
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const [signIn, setSignIn] = useState({ email: '', password: '' })
-  const [signUp, setSignUp] = useState({
-    name: '', email: '', team: '', clickup_user_id: '', invite_code: '', password: '', confirm: '',
-  })
-
-  function setSignInField(field) {
-    return e => setSignIn(f => ({ ...f, [field]: e.target.value }))
-  }
-
-  function setSignUpField(field) {
-    return e => setSignUp(f => ({ ...f, [field]: e.target.value }))
-  }
-
-  async function handleSignIn(e) {
+  async function handlePasswordLogin(e) {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -33,7 +21,7 @@ function LoginForm() {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: signIn.email, password: signIn.password }),
+      body: JSON.stringify({ email, password }),
     })
     const data = await res.json()
     setLoading(false)
@@ -46,49 +34,33 @@ function LoginForm() {
     router.push(data.role === 'lead' ? '/dashboard' : '/my-tasks')
   }
 
-  async function handleSignUp(e) {
+  async function handleSendCode(e) {
     e.preventDefault()
     setError('')
-
-    if (signUp.password !== signUp.confirm) {
-      setError('Passwords do not match.')
-      return
-    }
-
     setLoading(true)
 
-    const res = await fetch('/api/auth/onboard', {
+    const res = await fetch('/api/auth/send-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: signUp.name,
-        email: signUp.email,
-        team: signUp.team,
-        clickup_user_id: signUp.clickup_user_id,
-        invite_code: signUp.invite_code,
-        password: signUp.password,
-      }),
+      body: JSON.stringify({ email }),
     })
-    const data = await res.json()
     setLoading(false)
 
     if (!res.ok) {
-      setError(data.error || 'Sign up failed.')
+      setError('Something went wrong. Try again.')
       return
     }
 
-    router.push(data.role === 'lead' ? '/dashboard' : '/my-tasks')
+    // Store email for the verify page
+    sessionStorage.setItem('verify_email', email)
+    router.push('/verify')
   }
 
   return (
     <div className="flex min-h-screen">
-      {/* Left — background image */}
+      {/* Left — background */}
       <div className="hidden md:block md:w-1/2 relative">
-        <img
-          src="/onboardingbg.png"
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <img src="/onboardingbg.png" alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-black/30" />
         <div className="absolute bottom-10 left-10 text-white">
           <p className="text-2xl font-semibold leading-snug">HackUTD<br />Marketing Hub</p>
@@ -100,34 +72,20 @@ function LoginForm() {
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center space-y-1">
             <img src="/logo.png" alt="HackUTD" className="mx-auto mb-4 h-12 w-12 rounded-xl object-contain" />
-            <h1 className="text-xl font-semibold text-foreground">Welcome</h1>
-          </div>
-
-          {/* Tab switcher */}
-          <div className="flex rounded-lg border border-border bg-muted p-1 text-sm">
-            <button
-              onClick={() => { setTab('signin'); setError('') }}
-              className={`flex-1 rounded-md py-1.5 font-medium transition ${tab === 'signin' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Sign in
-            </button>
-            <button
-              onClick={() => { setTab('signup'); setError('') }}
-              className={`flex-1 rounded-md py-1.5 font-medium transition ${tab === 'signup' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Create account
-            </button>
+            <h1 className="text-xl font-semibold text-foreground">Welcome back</h1>
+            <p className="text-sm text-muted-foreground">HackUTD Marketing Hub</p>
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
+          {info  && <p className="text-xs text-muted-foreground">{info}</p>}
 
-          {tab === 'signin' ? (
-            <form onSubmit={handleSignIn} className="space-y-3">
+          {mode === 'password' ? (
+            <form onSubmit={handlePasswordLogin} className="space-y-3">
               <input
                 type="email"
                 placeholder="Email"
-                value={signIn.email}
-                onChange={setSignInField('email')}
+                value={email}
+                onChange={e => setEmail(e.target.value)}
                 required
                 autoFocus
                 className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -135,8 +93,8 @@ function LoginForm() {
               <input
                 type="password"
                 placeholder="Password"
-                value={signIn.password}
-                onChange={setSignInField('password')}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
                 className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -148,71 +106,26 @@ function LoginForm() {
               >
                 {loading ? 'Signing in…' : 'Sign in'}
               </button>
+              <button
+                type="button"
+                onClick={() => { setMode('magic'); setError(''); setInfo('') }}
+                className="w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                First time or forgot password? Get a login link →
+              </button>
             </form>
           ) : (
-            <form onSubmit={handleSignUp} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Full name"
-                value={signUp.name}
-                onChange={setSignUpField('name')}
-                required
-                autoFocus
-                className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+            <form onSubmit={handleSendCode} className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Enter your email and we'll send you a 6-digit login code.
+              </p>
               <input
                 type="email"
                 placeholder="Email"
-                value={signUp.email}
-                onChange={setSignUpField('email')}
+                value={email}
+                onChange={e => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <select
-                value={signUp.team}
-                onChange={setSignUpField('team')}
-                required
-                className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Select your team…</option>
-                {TEAMS.map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
-              </select>
-              <div className="space-y-1">
-                <input
-                  type="text"
-                  placeholder="ClickUp user ID (optional)"
-                  value={signUp.clickup_user_id}
-                  onChange={setSignUpField('clickup_user_id')}
-                  className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                <p className="px-1 text-[11px] text-muted-foreground">
-                  Find in ClickUp → avatar → Profile → numeric ID in the URL
-                </p>
-              </div>
-              <input
-                type="password"
-                placeholder="Password"
-                value={signUp.password}
-                onChange={setSignUpField('password')}
-                required
-                autoComplete="new-password"
-                className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                type="password"
-                placeholder="Confirm password"
-                value={signUp.confirm}
-                onChange={setSignUpField('confirm')}
-                required
-                autoComplete="new-password"
-                className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                type="text"
-                placeholder="Invite code"
-                value={signUp.invite_code}
-                onChange={setSignUpField('invite_code')}
-                required
+                autoFocus
                 className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
@@ -220,7 +133,14 @@ function LoginForm() {
                 disabled={loading}
                 className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
               >
-                {loading ? 'Creating account…' : 'Create account'}
+                {loading ? 'Sending…' : 'Send login code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode('password'); setError(''); setInfo('') }}
+                className="w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                ← Back to password login
               </button>
             </form>
           )}

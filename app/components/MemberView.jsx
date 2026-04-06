@@ -20,6 +20,7 @@ import { DRIVE_ROOT, QUICK_LINKS, TEAM_COLORS, TEAM_LABELS } from '@/lib/marketi
 import { cn } from '@/lib/utils'
 import ContentReelsView from '@/components/ContentReelsView'
 import CalendarView from '@/components/CalendarView'
+import OrgView from '@/components/OrgView'
 
 const QUICK_ACCESS = {
   design: [
@@ -56,6 +57,7 @@ const BASE_NAV = [
 const CONTENT_NAV = { id: 'reels', label: 'Reels', Icon: Video }
 
 const SIDEBAR_LINKS = QUICK_LINKS
+
 
 function formatDue(dateStr) {
   if (!dateStr) return ''
@@ -183,48 +185,10 @@ function MyTasksPanel({ tasks, loading, onToggle }) {
   )
 }
 
-function OrgViewPanel({ orgTasks, orgLoading }) {
-  const activeTasks = orgTasks.filter(t => t.status !== 'complete' && t.status !== 'closed')
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Org View</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {orgLoading ? 'Loading…' : `${activeTasks.length} active task${activeTasks.length !== 1 ? 's' : ''} across the team`}
-        </p>
-      </div>
-
-      {orgLoading ? (
-        <div className="flex justify-center py-10">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
-        </div>
-      ) : activeTasks.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">No active tasks.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {activeTasks.map(task => (
-            <div key={task.id} className="flex items-start justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
-              <p className="text-sm font-medium text-foreground leading-snug">{task.title}</p>
-              <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                {task.assignees.length > 0 && (
-                  <span>{task.assignees.join(', ')}</span>
-                )}
-                {task.due && <span className="tabular-nums">{formatDue(task.due)}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function MemberView({ user, onSignOut }) {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
-  const [orgTasks, setOrgTasks] = useState([])
-  const [orgLoading, setOrgLoading] = useState(false)
   const [activeView, setActiveView] = useState('home')
   const [collapsed, setCollapsed] = useState(false)
   const [driveOpen, setDriveOpen] = useState(false)
@@ -241,21 +205,8 @@ export default function MemberView({ user, onSignOut }) {
       .catch(() => setLoading(false))
   }, [user])
 
-  async function loadOrgTasks() {
-    if (orgTasks.length > 0) return
-
-    setOrgLoading(true)
-    const response = await fetch('/api/tasks/all')
-    const data = await response.json()
-    if (data?.tasks) setOrgTasks(data.tasks)
-    setOrgLoading(false)
-  }
-
-  async function openView(viewId) {
+  function openView(viewId) {
     setActiveView(viewId)
-    if (viewId === 'org-view') {
-      await loadOrgTasks()
-    }
   }
 
   async function handleToggle(task) {
@@ -440,9 +391,7 @@ export default function MemberView({ user, onSignOut }) {
           {activeView === 'my-tasks' && (
             <MyTasksPanel tasks={tasks} loading={loading} onToggle={handleToggle} />
           )}
-          {activeView === 'org-view' && (
-            <OrgViewPanel orgTasks={orgTasks} orgLoading={orgLoading} />
-          )}
+          {activeView === 'org-view' && <OrgView />}
           {activeView === 'calendar' && <CalendarView />}
           {activeView === 'reels' && <ContentReelsView />}
         </main>

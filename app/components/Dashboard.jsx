@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react'
 import {
   Calendar, CheckSquare, ChevronDown, ChevronLeft, ChevronRight,
   ExternalLink, File, FileSpreadsheet, FileText, FileVideo,
-  FolderOpen, Image, LayoutDashboard, Loader2, LogOut, Video,
+  FolderOpen, Image, LayoutDashboard, Layers3, Loader2, LogOut, Video,
 } from 'lucide-react'
 import CalendarView from './CalendarView'
 import DraftsView from './DraftsView'
+import OrgView from './OrgView'
 import OverviewPanel from './OverviewPanel'
 import RequestsView from './RequestsView'
 import TasksView from './TasksView'
@@ -22,6 +23,7 @@ const NAV = [
   { id: 'tasks',    label: 'Tasks',     Icon: CheckSquare },
   { id: 'drafts',   label: 'Drafts',    Icon: Video },
   { id: 'calendar', label: 'Calendar',  Icon: Calendar },
+  { id: 'org',      label: 'Org View',  Icon: Layers3 },
 ]
 
 const SIDEBAR_LINKS = QUICK_LINKS.filter(l => !l.name.includes('Notion'))
@@ -330,6 +332,7 @@ export default function Dashboard({ session, onSignOut, previewMode = false }) {
           {activeView === 'tasks'    && <TasksView />}
           {activeView === 'drafts'   && <DraftsView />}
           {activeView === 'calendar' && <CalendarView />}
+          {activeView === 'org'      && <OrgView />}
         </main>
       </div>
     </div>

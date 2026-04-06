@@ -52,7 +52,7 @@ async function getSession(request) {
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl
-  const isPublicPage = pathname === '/login' || pathname === '/onboarding' || pathname === '/verify'
+  const isPublicPage = pathname === '/login' || pathname === '/onboarding' || pathname === '/verify' || pathname === '/set-password'
   const isPublicAuthApi = pathname.startsWith('/api/auth')
   const isPublicRequestIngress = pathname === '/api/requests'
 
