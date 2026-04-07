@@ -91,6 +91,15 @@ export function guessTeamFromRow(row = {}) {
   return 'design'
 }
 
+function findCol(row, ...names) {
+  const keys = Object.keys(row)
+  for (const name of names) {
+    const key = keys.find(k => k.trim().toLowerCase() === name.toLowerCase())
+    if (key !== undefined && row[key] !== '') return row[key]
+  }
+  return ''
+}
+
 export function mapSheetRowsToRequests(rows = []) {
   return rows.map((row, index) =>
     formatRequestRecord({
@@ -104,8 +113,9 @@ export function mapSheetRowsToRequests(rows = []) {
         row['Description'] ??
         '',
       due_requested: parseSheetDate(row['When do you need it by?'] ?? row['Due requested'] ?? ''),
-      team: row['Team'] ?? guessTeamFromRow(row),
+      team: findCol(row, 'Team') || guessTeamFromRow(row),
       status: 'submitted',
+      assigneeName: findCol(row, 'Assignee', 'Assigned To', 'Assigned', 'Assignee Name'),
       created_at: row['Timestamp'] ?? '',
     })
   )
@@ -114,6 +124,12 @@ export function mapSheetRowsToRequests(rows = []) {
 export function formatRequestRecord(record = {}) {
   const status = normalizeRequestStatus(record.status)
   const team = normalizeTeam(record.team) || 'design'
+
+  const assignedToUserIds = Array.isArray(record.assignedToUserIds)
+    ? record.assignedToUserIds
+    : (record.assigned_to ?? record.assignedToUserId)
+      ? [record.assigned_to ?? record.assignedToUserId].filter(Boolean)
+      : []
 
   return {
     id: record.id,
@@ -125,7 +141,7 @@ export function formatRequestRecord(record = {}) {
     team,
     status,
     boardStatus: record.clickup_task_id || record.clickupTaskId ? 'in_clickup' : status,
-    assignedToUserId: record.assigned_to ?? record.assignedToUserId ?? '',
+    assignedToUserIds,
     assigneeName: record.assigneeName ?? '',
     clickupTaskId: record.clickup_task_id ?? record.clickupTaskId ?? null,
     timestamp: record.created_at ?? record.timestamp ?? '',

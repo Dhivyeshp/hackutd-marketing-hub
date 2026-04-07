@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, ArrowRight, RefreshCw } from 'lucide-react'
+import { AlertCircle, ArrowRight, Check, ChevronDown, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TEAM_COLORS } from '@/lib/marketing'
 import { REQUEST_COLUMNS, getRequestBoardStatus } from '@/lib/requests'
 import { cn } from '@/lib/utils'
@@ -26,6 +26,62 @@ function formatDue(dateString) {
   })
 }
 
+function AssigneePopover({ request, assigneeOptions, onAssign }) {
+  const selected = useMemo(() => new Set(request.assignedToUserIds ?? []), [request.assignedToUserIds])
+
+  function toggle(userId) {
+    const next = new Set(selected)
+    if (next.has(userId)) next.delete(userId)
+    else next.add(userId)
+    onAssign(request.id, [...next])
+  }
+
+  const selectedUsers = assigneeOptions.filter(u => selected.has(u.id))
+  const hasUnmatchedSheetName = request.assigneeName && selectedUsers.length === 0
+
+  let label = 'Assign to...'
+  if (selectedUsers.length === 1) label = selectedUsers[0].name
+  else if (selectedUsers.length > 1) label = `${selectedUsers.length} assignees`
+  else if (hasUnmatchedSheetName) label = request.assigneeName
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="h-8 w-full justify-between text-xs font-normal">
+          <span className="truncate">{label}</span>
+          <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        <div className="max-h-52 space-y-0.5 overflow-y-auto">
+          {assigneeOptions.map(user => (
+            <button
+              key={user.id}
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted"
+              onClick={() => toggle(user.id)}
+            >
+              <div
+                className={cn(
+                  'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-border',
+                  selected.has(user.id) && 'border-primary bg-primary'
+                )}
+              >
+                {selected.has(user.id) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+              </div>
+              <span className="truncate">{user.name}</span>
+            </button>
+          ))}
+          {hasUnmatchedSheetName && (
+            <div className="px-2 py-1.5 text-xs italic text-muted-foreground">
+              {request.assigneeName} (from sheet)
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 function RequestCard({
   request,
@@ -38,7 +94,7 @@ function RequestCard({
   const teamColors = TEAM_COLORS[request.team] ?? TEAM_COLORS.design
   const boardStatus = getRequestBoardStatus(request)
   const isDeferred = request.status === 'deferred'
-  const canApprove = Boolean(request.assignedToUserId)
+  const canApprove = (request.assignedToUserIds?.length > 0) || Boolean(request.assigneeName)
   const primaryActionLabel = boardStatus === 'approved' ? 'Send to ClickUp' : 'Approve'
 
   return (
@@ -88,25 +144,14 @@ function RequestCard({
       </div>
 
       {boardStatus !== 'in_clickup' && (
-        <Select
-          value={request.assignedToUserId || 'unassigned'}
-          onValueChange={value => onAssign(request.id, value === 'unassigned' ? '' : value)}
-        >
-          <SelectTrigger className="h-8 text-xs">
-            <SelectValue placeholder="Assign to..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            {assigneeOptions.map(user => (
-              <SelectItem key={user.id} value={user.id}>
-                {user.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <AssigneePopover
+          request={request}
+          assigneeOptions={assigneeOptions}
+          onAssign={onAssign}
+        />
       )}
 
-      {request.assigneeName && boardStatus === 'in_clickup' && (
+      {boardStatus === 'in_clickup' && request.assigneeName && (
         <p className="text-xs text-muted-foreground">Assigned to {request.assigneeName}</p>
       )}
 
@@ -211,8 +256,23 @@ export default function RequestsView() {
         throw new Error(requestsData.error ?? 'Failed to load requests')
       }
 
-      setRequests(requestsData.requests ?? [])
-      setAssignableUsers(usersData.users ?? [])
+      const users = usersData.users ?? []
+      const usersByName = Object.fromEntries(users.map(u => [u.name.toLowerCase(), u]))
+
+      // For sheet-based requests, match comma-separated Assignee names to user IDs
+      const resolvedRequests = (requestsData.requests ?? []).map(req => {
+        if (req.assigneeName && (!req.assignedToUserIds || req.assignedToUserIds.length === 0)) {
+          const names = req.assigneeName.split(',').map(n => n.trim()).filter(Boolean)
+          const matched = names.map(n => usersByName[n.toLowerCase()]).filter(Boolean)
+          if (matched.length > 0) {
+            return { ...req, assignedToUserIds: matched.map(u => u.id) }
+          }
+        }
+        return req
+      })
+
+      setRequests(resolvedRequests)
+      setAssignableUsers(users)
       setError(requestsData.warning ?? '')
     } catch (loadError) {
       setError(loadError.message)
@@ -235,13 +295,22 @@ export default function RequestsView() {
     )
   }
 
-  function handleAssign(id, assignedToUserId) {
-    const assignee = usersById[assignedToUserId]
+  function handleAssign(id, newUserIds) {
+    const names = newUserIds.map(uid => usersById[uid]?.name ?? '').filter(Boolean)
+    const assigneeName = names.join(', ')
 
-    updateRequest(id, {
-      assignedToUserId,
-      assigneeName: assignee?.name ?? '',
-    })
+    updateRequest(id, { assignedToUserIds: newUserIds, assigneeName })
+
+    // Persist comma-separated names back to Google Sheets for sheet-based requests
+    if (id.startsWith('sheet-request-')) {
+      fetch('/api/sheets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: id, assigneeName }),
+      }).catch(() => {
+        // Non-blocking — local state already updated
+      })
+    }
   }
 
   async function handleStatusChange(request, status) {
@@ -269,7 +338,8 @@ export default function RequestsView() {
   }
 
   async function handleApprove(request) {
-    if (!request.assignedToUserId) return
+    const userIds = request.assignedToUserIds ?? []
+    if (userIds.length === 0 && !request.assigneeName) return
 
     setMoving(prev => ({ ...prev, [request.id]: true }))
 
@@ -278,7 +348,8 @@ export default function RequestsView() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          assigned_to_user_id: request.assignedToUserId,
+          assigned_to_user_ids: userIds,
+          assigned_to_user_id: userIds[0] ?? '',
           assignee_name: request.assigneeName,
           request,
         }),

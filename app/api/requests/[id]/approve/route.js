@@ -19,7 +19,7 @@ function toClickUpDescription(request) {
   return `${description}\n\nRequested by: ${requester} (${fromOrg})`.trim()
 }
 
-async function createClickUpTask({ request, assignee }) {
+async function createClickUpTask({ request, assignees }) {
   if (!hasClickUpEnv()) {
     return {
       id: `preview-request-${Date.now()}`,
@@ -38,8 +38,9 @@ async function createClickUpTask({ request, assignee }) {
     payload.due_date_time = false
   }
 
-  if (assignee?.clickup_user_id) {
-    payload.assignees = [assignee.clickup_user_id]
+  const clickupIds = assignees.map(a => a.clickup_user_id).filter(Boolean)
+  if (clickupIds.length > 0) {
+    payload.assignees = clickupIds
   }
 
   const response = await fetch(`https://api.clickup.com/api/v2/list/${process.env.CLICKUP_LIST_ID}/task`, {
@@ -75,16 +76,24 @@ export async function PATCH(request, { params }) {
   }
 
   const body = await request.json()
-  if (!body.assigned_to_user_id) {
+
+  // Accept array (new) or fall back to single ID (old)
+  const userIds = Array.isArray(body.assigned_to_user_ids) && body.assigned_to_user_ids.length > 0
+    ? body.assigned_to_user_ids
+    : body.assigned_to_user_id
+      ? [body.assigned_to_user_id]
+      : []
+
+  if (userIds.length === 0 && !body.assignee_name) {
     return Response.json({ error: 'Select an assignee first' }, { status: 400 })
   }
 
   const isSheetRequest = !UUID_RE.test(params.id)
   let requestRecord = null
-  let assignee = null
+  let assignees = []
 
   if (hasSupabaseAdminEnv() && !isSheetRequest) {
-    const [{ data: requestData, error: requestError }, { data: assigneeData, error: assigneeError }] = await Promise.all([
+    const [{ data: requestData, error: requestError }, { data: assigneeRows, error: assigneeError }] = await Promise.all([
       supabaseAdmin
         .from('requests')
         .select('id, type, from_name, from_org, description, due_requested, team, status, assigned_to, clickup_task_id, created_at')
@@ -93,50 +102,59 @@ export async function PATCH(request, { params }) {
       supabaseAdmin
         .from('users')
         .select('id, name, clickup_user_id')
-        .eq('id', body.assigned_to_user_id)
-        .single(),
+        .in('id', userIds),
     ])
 
     if (requestError || !requestData) {
       return Response.json({ error: requestError?.message || 'Request not found' }, { status: 404 })
     }
 
-    if (assigneeError || !assigneeData) {
-      return Response.json({ error: assigneeError?.message || 'Assignee not found' }, { status: 404 })
+    if (assigneeError) {
+      return Response.json({ error: assigneeError.message || 'Failed to fetch assignees' }, { status: 404 })
     }
+
+    assignees = assigneeRows ?? []
+    const assigneeName = assignees.map(a => a.name).join(', ')
 
     requestRecord = formatRequestRecord({
       ...requestData,
-      assigned_to: assigneeData.id,
-      assigneeName: assigneeData.name,
+      assignedToUserIds: assignees.map(a => a.id),
+      assigneeName,
     })
-    assignee = assigneeData
   } else {
     if (!body.request) {
       return Response.json({ error: 'Missing request payload' }, { status: 400 })
     }
 
-    // For sheet-based requests, still look up the real assignee from Supabase if possible
-    if (hasSupabaseAdminEnv() && isSheetRequest) {
-      const { data: assigneeData } = await supabaseAdmin
+    // For sheet-based requests, look up real assignees from Supabase if possible
+    if (hasSupabaseAdminEnv() && userIds.length > 0) {
+      const { data: assigneeRows } = await supabaseAdmin
         .from('users')
         .select('id, name, clickup_user_id')
-        .eq('id', body.assigned_to_user_id)
-        .single()
-      assignee = assigneeData ?? { id: body.assigned_to_user_id, name: body.assignee_name ?? '', clickup_user_id: null }
-    } else {
-      assignee = { id: body.assigned_to_user_id, name: body.assignee_name ?? '', clickup_user_id: null }
+        .in('id', userIds)
+      assignees = assigneeRows ?? []
     }
+
+    if (assignees.length === 0) {
+      assignees = userIds.map((id, i) => ({
+        id,
+        name: body.assignee_name?.split(',')[i]?.trim() ?? '',
+        clickup_user_id: null,
+      }))
+    }
+
+    const assigneeName = assignees.map(a => a.name).filter(Boolean).join(', ') || body.assignee_name || ''
 
     requestRecord = formatRequestRecord({
       ...body.request,
       id: params.id,
-      assignedToUserId: body.assigned_to_user_id,
-      assigneeName: assignee.name,
+      assignedToUserIds: assignees.map(a => a.id),
+      assigneeName,
     })
   }
 
-  const task = await createClickUpTask({ request: requestRecord, assignee })
+  const task = await createClickUpTask({ request: requestRecord, assignees })
+  const assigneeName = assignees.map(a => a.name).filter(Boolean).join(', ') || body.assignee_name || ''
 
   if (!hasSupabaseAdminEnv() || isSheetRequest) {
     return Response.json({
@@ -145,11 +163,11 @@ export async function PATCH(request, { params }) {
       request: formatRequestRecord({
         ...requestRecord,
         status: 'approved',
-        assignedToUserId: body.assigned_to_user_id,
-        assigneeName: assignee.name,
+        assignedToUserIds: assignees.map(a => a.id),
+        assigneeName,
         clickupTaskId: task.id,
       }),
-      assigneeName: assignee.name,
+      assigneeName,
     })
   }
 
@@ -157,7 +175,7 @@ export async function PATCH(request, { params }) {
     .from('requests')
     .update({
       status: 'approved',
-      assigned_to: assignee.id,
+      assigned_to: assignees[0]?.id ?? null,
       clickup_task_id: task.id,
     })
     .eq('id', params.id)
@@ -173,8 +191,9 @@ export async function PATCH(request, { params }) {
     preview: task.preview,
     request: formatRequestRecord({
       ...updated,
-      assigneeName: assignee.name,
+      assignedToUserIds: assignees.map(a => a.id),
+      assigneeName,
     }),
-    assigneeName: assignee.name,
+    assigneeName,
   })
 }
