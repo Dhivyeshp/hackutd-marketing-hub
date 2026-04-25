@@ -44,10 +44,11 @@ function LoginForm() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     })
+    const data = await res.json()
     setLoading(false)
 
     if (!res.ok) {
-      setError('Something went wrong. Try again.')
+      setError(data.error || 'Something went wrong. Try again.')
       return
     }
 
