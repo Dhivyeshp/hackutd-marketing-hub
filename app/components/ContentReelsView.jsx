@@ -150,12 +150,12 @@ function DetailModal({ row, columns, statusPropName, onClose, onStatusChange, on
           />
 
           <div className="rounded-xl border border-border bg-muted/50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Share with collaborator</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Share with actor</p>
             <p className="text-xs text-muted-foreground mb-2">
-              Copy this link and send it to your filmer or storyboarder. They can update their progress without an account.
+              Copy this link and send it to the person acting in this reel. No account needed.
             </p>
             <Button variant="outline" size="sm" className="w-full text-xs" onClick={copy}>
-              {copied ? <><Check className="h-3 w-3" /> Link copied!</> : <><Copy className="h-3 w-3" /> Copy collaborator link</>}
+              {copied ? <><Check className="h-3 w-3" /> Link copied!</> : <><Copy className="h-3 w-3" /> Copy actor link</>}
             </Button>
           </div>
         </div>
@@ -192,7 +192,7 @@ function ReelCard({ row, statusPropName, onStatusChange, onAssign, onOpen, busy 
         </div>
         <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
           <button
-            title={copied ? 'Copied!' : 'Copy collaborator link'}
+            title={copied ? 'Copied!' : 'Copy actor link'}
             onClick={copy}
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded-lg border border-border transition',
@@ -201,26 +201,7 @@ function ReelCard({ row, statusPropName, onStatusChange, onAssign, onOpen, busy 
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
-          {row.notionUrl && (
-            <a
-              href={row.notionUrl} target="_blank" rel="noopener noreferrer"
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:text-foreground hover:bg-muted"
-            >
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </a>
-          )}
         </div>
-      </div>
-
-      <div onClick={e => e.stopPropagation()}>
-        <Select value={status} onValueChange={s => onStatusChange(row.id, s)}>
-          <SelectTrigger className="h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
       </div>
     </div>
   )
@@ -343,7 +324,7 @@ export default function ContentReelsView() {
           <div>
             <h2 className="text-2xl font-semibold text-foreground">Reel Ideas</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage your reels pipeline · Copy a card's link to share with external filmers/editors
+              Manage your reels pipeline · Copy a card's link to share with actors
             </p>
           </div>
           <Button variant="outline" size="icon" onClick={() => load(true)} disabled={loading} className="rounded-xl">
