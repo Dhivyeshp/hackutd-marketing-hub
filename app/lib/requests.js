@@ -1,6 +1,6 @@
 import { cloneRequests } from '@/lib/marketing'
 
-export const REQUEST_COLUMNS = ['submitted', 'in_review', 'approved', 'in_clickup']
+export const REQUEST_COLUMNS = ['submitted', 'in_review', 'completed', 'in_clickup']
 
 export const DEFAULT_REQUEST_ASSIGNEES = {
   design: [
@@ -45,7 +45,8 @@ export function normalizeRequestStatus(status = 'submitted') {
   const value = status.toString().trim().toLowerCase().replace(/\s+/g, '_')
 
   if (!value) return 'submitted'
-  if (value === 'in_clickup' || value === 'clickup') return 'approved'
+  if (value === 'in_clickup' || value === 'clickup') return 'completed'
+  if (value === 'approved') return 'completed'
   if (value === 'review') return 'in_review'
   if (value === 'reconsider') return 'submitted'
 
@@ -114,7 +115,7 @@ export function mapSheetRowsToRequests(rows = []) {
         '',
       due_requested: parseSheetDate(row['When do you need it by?'] ?? row['Due requested'] ?? ''),
       team: findCol(row, 'Team') || guessTeamFromRow(row),
-      status: 'submitted',
+      status: normalizeRequestStatus(findCol(row, 'Status')) || 'submitted',
       assigneeName: findCol(row, 'Assignee', 'Assigned To', 'Assigned', 'Assignee Name'),
       created_at: row['Timestamp'] ?? '',
     })

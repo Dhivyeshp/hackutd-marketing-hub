@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { getSession } from '@/lib/session'
+import { cached } from '@/lib/cache'
 
 const SHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
 const SHEET_RANGE = 'Hack Marketing Request From (Responses)'
@@ -23,21 +24,37 @@ async function getSheetsToken(scopes = ['https://www.googleapis.com/auth/spreads
 }
 
 async function resolveSheetTitle(token) {
-  const metaRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
-  if (!metaRes.ok) {
-    const err = await metaRes.json()
-    throw new Error(err.error?.message ?? 'Could not fetch spreadsheet metadata')
-  }
-  const meta = await metaRes.json()
-  const sheets = meta.sheets ?? []
-  const target = sheets.find(
-    s => s.properties.title.trim().toLowerCase() === SHEET_RANGE.trim().toLowerCase()
-  ) ?? sheets[0]
-  if (!target) throw new Error('No sheets found in spreadsheet')
-  return target.properties.title
+  return cached('sheets:title', 60 * 60_000, async () => {
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    if (!metaRes.ok) {
+      const err = await metaRes.json()
+      throw new Error(err.error?.message ?? 'Could not fetch spreadsheet metadata')
+    }
+    const meta = await metaRes.json()
+    const sheets = meta.sheets ?? []
+    const target = sheets.find(
+      s => s.properties.title.trim().toLowerCase() === SHEET_RANGE.trim().toLowerCase()
+    ) ?? sheets[0]
+    if (!target) throw new Error('No sheets found in spreadsheet')
+    return target.properties.title
+  })
+}
+
+async function resolveSheetHeader(token, title) {
+  return cached('sheets:header', 60 * 60_000, async () => {
+    const headerRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(title)}!1:1`,
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    )
+    if (!headerRes.ok) {
+      const err = await headerRes.json()
+      throw new Error(err.error?.message ?? 'Could not fetch header row')
+    }
+    return (await headerRes.json()).values?.[0] ?? []
+  })
 }
 
 export async function GET() {
@@ -72,7 +89,7 @@ export async function GET() {
   }
 }
 
-// Updates the Assignee column for a sheet-based request.
+// Updates Assignee and/or Status columns for a sheet-based request.
 // requestId must be in the form "sheet-request-{rowIndex}" (0-based data row).
 export async function PATCH(request) {
   const session = getSession()
@@ -84,11 +101,19 @@ export async function PATCH(request) {
     return NextResponse.json({ error: 'Missing Google Sheets credentials' }, { status: 500 })
   }
 
-  const { requestId, assigneeName } = await request.json()
+  const { requestId, assigneeName, status } = await request.json()
 
   const match = requestId?.match(/^sheet-request-(\d+)$/)
   if (!match) {
     return NextResponse.json({ error: 'Not a sheet-based request' }, { status: 400 })
+  }
+
+  const fieldUpdates = []
+  if (assigneeName !== undefined) fieldUpdates.push({ column: 'assignee', value: assigneeName ?? '' })
+  if (status !== undefined) fieldUpdates.push({ column: 'status', value: status ?? '' })
+
+  if (fieldUpdates.length === 0) {
+    return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
   }
 
   // rowIndex is 0-based data index; sheet row = index + 2 (header is row 1, data starts at row 2)
@@ -100,38 +125,32 @@ export async function PATCH(request) {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     const title = await resolveSheetTitle(token)
 
-    // Fetch header row to find the Assignee column index
-    const headerRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(title)}!1:1`,
-      { headers }
-    )
-    if (!headerRes.ok) {
-      const err = await headerRes.json()
-      throw new Error(err.error?.message ?? 'Could not fetch header row')
-    }
-    const headerData = await headerRes.json()
-    const headerRow = headerData.values?.[0] ?? []
-    const assigneeColIndex = headerRow.findIndex(col => col.trim().toLowerCase() === 'assignee')
+    const headerRow = await resolveSheetHeader(token, title)
 
-    if (assigneeColIndex === -1) {
-      return NextResponse.json({ error: 'Assignee column not found in sheet' }, { status: 400 })
+    // Build one range per field; skip any column not present in the sheet
+    const valueRanges = fieldUpdates.flatMap(({ column, value }) => {
+      const colIndex = headerRow.findIndex(col => col.trim().toLowerCase() === column)
+      if (colIndex === -1) return []
+      // Convert 0-based column index to A1 letter (supports up to column Z)
+      const colLetter = String.fromCharCode(65 + colIndex)
+      return [{ range: `${title}!${colLetter}${sheetRow}`, values: [[value]] }]
+    })
+
+    if (valueRanges.length === 0) {
+      return NextResponse.json({ error: 'No matching columns found in sheet' }, { status: 400 })
     }
 
-    // Convert 0-based column index to A1 letter (supports up to column Z)
-    const colLetter = String.fromCharCode(65 + assigneeColIndex)
-    const range = `${title}!${colLetter}${sheetRow}`
-
-    const updateRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+    const batchRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`,
       {
-        method: 'PUT',
+        method: 'POST',
         headers,
-        body: JSON.stringify({ range, values: [[assigneeName ?? '']] }),
+        body: JSON.stringify({ valueInputOption: 'RAW', data: valueRanges }),
       }
     )
 
-    if (!updateRes.ok) {
-      const err = await updateRes.json()
+    if (!batchRes.ok) {
+      const err = await batchRes.json()
       throw new Error(err.error?.message ?? 'Failed to update sheet')
     }
 

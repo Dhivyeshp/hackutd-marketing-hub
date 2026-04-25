@@ -1,6 +1,7 @@
 import { google } from 'googleapis'
 import { getSession, safeCompare } from '@/lib/session'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { cached, invalidate } from '@/lib/cache'
 import {
   formatRequestRecord,
   getPreviewRequests,
@@ -8,6 +9,10 @@ import {
   mapSheetRowsToRequests,
   normalizeTeam,
 } from '@/lib/requests'
+
+const REQUESTS_SHEETS_KEY = 'requests:sheets'
+const REQUESTS_SUPABASE_KEY = 'requests:supabase'
+const REQUESTS_TTL_MS = 2 * 60_000 // 2 minutes
 
 
 function hasSupabaseAdminEnv() {
@@ -102,7 +107,7 @@ async function loadRequestsFromSheets() {
   return mapSheetRowsToRequests(mappedRows)
 }
 
-export async function GET() {
+export async function GET(request) {
   const session = getSession()
   if (!session) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -112,16 +117,22 @@ export async function GET() {
     return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const { searchParams } = new URL(request.url)
+  if (searchParams.get('refresh') === '1') {
+    invalidate(REQUESTS_SHEETS_KEY)
+    invalidate(REQUESTS_SUPABASE_KEY)
+  }
+
   try {
     if (hasSupabaseAdminEnv()) {
-      const requests = await loadRequestsFromSupabase()
+      const requests = await cached(REQUESTS_SUPABASE_KEY, REQUESTS_TTL_MS, loadRequestsFromSupabase)
       if (requests.length > 0) {
         return Response.json({ requests, source: 'supabase' })
       }
       // Supabase configured but empty — fall through to Sheets for existing data
     }
 
-    const requests = await loadRequestsFromSheets()
+    const requests = await cached(REQUESTS_SHEETS_KEY, REQUESTS_TTL_MS, loadRequestsFromSheets)
     return Response.json({ requests, source: 'sheets' })
   } catch (error) {
     return Response.json({ requests: getPreviewRequests(), source: 'preview', warning: error.message })
@@ -156,6 +167,7 @@ export async function POST(request) {
   }
 
   if (!hasSupabaseAdminEnv()) {
+    invalidate(REQUESTS_SHEETS_KEY)
     return Response.json({ ok: true, preview: true, request: formatRequestRecord(record) })
   }
 
@@ -169,5 +181,6 @@ export async function POST(request) {
     return Response.json({ error: error.message }, { status: 500 })
   }
 
+  invalidate(REQUESTS_SUPABASE_KEY)
   return Response.json({ ok: true, request: formatRequestRecord(data) })
 }

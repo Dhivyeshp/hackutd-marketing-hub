@@ -42,7 +42,23 @@ async function safeJson(response) {
 }
 
 const CLICKUP_TASKS_KEY = 'clickup:tasks'
-const CLICKUP_TTL_MS = 60_000 // 60 seconds
+const CLICKUP_TTL_MS = 5 * 60_000 // 5 minutes
+
+function taskUrl(page) {
+  return `https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task?include_closed=false&page=${page}`
+}
+
+function normalizeTask(task) {
+  return {
+    id: task.id,
+    title: task.name,
+    team: inferTeam(task.name, task.tags),
+    due: task.due_date ? new Date(Number(task.due_date)).toISOString().split('T')[0] : null,
+    assignees: (task.assignees ?? []).map(a => a.username || a.email || a.initials || '').filter(Boolean),
+    status: task.status?.status ?? 'to do',
+    clickupUrl: task.url,
+  }
+}
 
 export async function GET(request) {
   const session = getSession()
@@ -56,34 +72,35 @@ export async function GET(request) {
 
   try {
     const tasks = await cached(CLICKUP_TASKS_KEY, CLICKUP_TTL_MS, async () => {
-      const allTasks = []
-      let page = 0
+      const headers = { Authorization: CLICKUP_API_KEY }
 
-      while (page < 20) {
-        const res = await fetch(
-          `https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task?include_closed=true&page=${page}`,
-          { headers: { Authorization: CLICKUP_API_KEY } }
-        )
-        const data = await safeJson(res)
-        if (!res.ok) throw new Error(data?.err || data?.error || 'ClickUp API error')
+      // Fetch page 0 first to check if there are more pages
+      const firstRes = await fetch(taskUrl(0), { headers })
+      const firstData = await safeJson(firstRes)
+      if (!firstRes.ok) throw new Error(firstData?.err || firstData?.error || 'ClickUp API error')
 
-        const pageTasks = data?.tasks ?? []
-        allTasks.push(...pageTasks)
+      const firstBatch = firstData?.tasks ?? []
 
-        // last_page: true = done; last_page: false = more pages
-        if (data?.last_page !== false || pageTasks.length === 0) break
-        page++
+      // If only one page, done immediately
+      if (firstData?.last_page !== false || firstBatch.length === 0) {
+        return firstBatch.map(normalizeTask)
       }
 
-      return allTasks.map((task) => ({
-        id: task.id,
-        title: task.name,
-        team: inferTeam(task.name, task.tags),
-        due: task.due_date ? new Date(Number(task.due_date)).toISOString().split('T')[0] : null,
-        assignees: (task.assignees ?? []).map(a => a.username || a.email || a.initials || '').filter(Boolean),
-        status: task.status?.status ?? 'to do',
-        clickupUrl: task.url,
-      }))
+      // Fetch remaining pages in parallel (cap at 19 more pages = 2000 tasks max)
+      const remaining = await Promise.all(
+        Array.from({ length: 19 }, (_, i) => i + 1).map(p =>
+          fetch(taskUrl(p), { headers }).then(r => safeJson(r))
+        )
+      )
+
+      const allRaw = [...firstBatch]
+      for (const data of remaining) {
+        const batch = data?.tasks ?? []
+        allRaw.push(...batch)
+        if (data?.last_page !== false || batch.length === 0) break
+      }
+
+      return allRaw.map(normalizeTask)
     })
 
     return NextResponse.json({ tasks })
@@ -101,7 +118,7 @@ export async function PATCH(request) {
   if (missingEnvResponse) return missingEnvResponse
 
   try {
-    const { taskId, assignees, due } = await request.json()
+    const { taskId, assignees, due, team } = await request.json()
 
     if (!taskId) {
       return NextResponse.json({ error: 'Missing taskId' }, { status: 400 })
@@ -118,6 +135,10 @@ export async function PATCH(request) {
     if (due !== undefined) {
       body.due_date = due ? new Date(due).getTime() : null
       body.due_date_time = false
+    }
+
+    if (team !== undefined) {
+      body.tags = [{ name: team }]
     }
 
     const res = await fetch(`https://api.clickup.com/api/v2/task/${taskId}`, {

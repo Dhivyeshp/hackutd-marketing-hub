@@ -1,6 +1,9 @@
 import { getSession } from '@/lib/session'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { cached } from '@/lib/cache'
 import { getDefaultAssignableUsers, normalizeTeam } from '@/lib/requests'
+
+const USERS_TTL_MS = 5 * 60_000 // 5 minutes
 
 
 function hasSupabaseAdminEnv() {
@@ -26,27 +29,28 @@ export async function GET(request) {
     return Response.json({ users })
   }
 
-  let query = supabaseAdmin
-    .from('users')
-    .select('id, name, team, role, clickup_user_id')
-    .order('name', { ascending: true })
+  const cacheKey = `users:${team || 'all'}:${role || 'all'}`
 
-  if (team) query = query.eq('team', team)
-  if (role) query = query.eq('role', role)
+  const users = await cached(cacheKey, USERS_TTL_MS, async () => {
+    let query = supabaseAdmin
+      .from('users')
+      .select('id, name, team, role, clickup_user_id')
+      .order('name', { ascending: true })
 
-  const { data, error } = await query
+    if (team) query = query.eq('team', team)
+    if (role) query = query.eq('role', role)
 
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 })
-  }
+    const { data, error } = await query
+    if (error) throw new Error(error.message)
 
-  const users = (data ?? []).map(user => ({
-    id: user.id,
-    name: user.name,
-    team: user.team,
-    role: user.role,
-    clickupUserId: user.clickup_user_id,
-  }))
+    return (data ?? []).map(user => ({
+      id: user.id,
+      name: user.name,
+      team: user.team,
+      role: user.role,
+      clickupUserId: user.clickup_user_id,
+    }))
+  })
 
   return Response.json({ users })
 }

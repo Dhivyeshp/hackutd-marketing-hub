@@ -1,26 +1,35 @@
-/**
- * Simple in-memory TTL cache for server-side API route handlers.
- * Lives in the Node.js process — survives across requests, resets on deploy/restart.
- */
 const store = new Map()
 
 /**
- * Returns cached data if still fresh, otherwise calls fetcher, caches, and returns the result.
- * @param {string}   key      Cache key
- * @param {number}   ttlMs    Time-to-live in milliseconds
- * @param {Function} fetcher  Async function that returns the data to cache
+ * Stale-while-revalidate cache.
+ * - Fresh hit (within TTL): return immediately.
+ * - Stale hit (past TTL): return stale data immediately, kick off background refresh.
+ * - Cold miss: await the fetcher (only slow path is the very first load).
  */
 export async function cached(key, ttlMs, fetcher) {
   const entry = store.get(key)
-  if (entry && Date.now() < entry.expiresAt) {
+
+  if (entry) {
+    if (Date.now() < entry.expiresAt) {
+      return entry.data
+    }
+    // Stale: serve immediately and revalidate in background
+    if (!entry.revalidating) {
+      entry.revalidating = true
+      fetcher()
+        .then(data => store.set(key, { data, expiresAt: Date.now() + ttlMs, revalidating: false }))
+        .catch(() => { if (store.has(key)) store.get(key).revalidating = false })
+    }
     return entry.data
   }
+
+  // Cold start — must wait
   const data = await fetcher()
-  store.set(key, { data, expiresAt: Date.now() + ttlMs })
+  store.set(key, { data, expiresAt: Date.now() + ttlMs, revalidating: false })
   return data
 }
 
-/** Remove an entry so the next request re-fetches from the source. */
+/** Force next request to re-fetch from source (bypass stale-while-revalidate). */
 export function invalidate(key) {
   store.delete(key)
 }
