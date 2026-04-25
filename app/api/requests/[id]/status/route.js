@@ -1,5 +1,6 @@
 import { getSession } from '@/lib/session'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { invalidate } from '@/lib/cache'
 import { formatRequestRecord, normalizeRequestStatus } from '@/lib/requests'
 
 
@@ -7,7 +8,7 @@ function hasSupabaseAdminEnv() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
 }
 
-const VALID_STATUSES = new Set(['submitted', 'in_review', 'approved', 'deferred', 'rejected'])
+const VALID_STATUSES = new Set(['submitted', 'in_review', 'completed', 'deferred', 'rejected'])
 
 export async function PATCH(request, { params }) {
   const session = getSession()
@@ -31,6 +32,7 @@ export async function PATCH(request, { params }) {
   const isSheetRequest = !UUID_RE.test(params.id)
 
   if (!hasSupabaseAdminEnv() || isSheetRequest) {
+    invalidate('requests:sheets')
     return Response.json({
       ok: true,
       preview: isSheetRequest,
@@ -53,5 +55,6 @@ export async function PATCH(request, { params }) {
     return Response.json({ error: error.message }, { status: 500 })
   }
 
+  invalidate('requests:supabase')
   return Response.json({ ok: true, request: formatRequestRecord(data) })
 }

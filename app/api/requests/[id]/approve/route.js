@@ -1,5 +1,6 @@
 import { getSession } from '@/lib/session'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { invalidate } from '@/lib/cache'
 import { buildRequestTaskTitle, formatRequestRecord } from '@/lib/requests'
 
 
@@ -157,12 +158,13 @@ export async function PATCH(request, { params }) {
   const assigneeName = assignees.map(a => a.name).filter(Boolean).join(', ') || body.assignee_name || ''
 
   if (!hasSupabaseAdminEnv() || isSheetRequest) {
+    invalidate('requests:sheets')
     return Response.json({
       ok: true,
       preview: task.preview,
       request: formatRequestRecord({
         ...requestRecord,
-        status: 'approved',
+        status: 'completed',
         assignedToUserIds: assignees.map(a => a.id),
         assigneeName,
         clickupTaskId: task.id,
@@ -174,7 +176,7 @@ export async function PATCH(request, { params }) {
   const { data: updated, error: updateError } = await supabaseAdmin
     .from('requests')
     .update({
-      status: 'approved',
+      status: 'completed',
       assigned_to: assignees[0]?.id ?? null,
       clickup_task_id: task.id,
     })
@@ -186,6 +188,7 @@ export async function PATCH(request, { params }) {
     return Response.json({ error: updateError.message }, { status: 500 })
   }
 
+  invalidate('requests:supabase')
   return Response.json({
     ok: true,
     preview: task.preview,
