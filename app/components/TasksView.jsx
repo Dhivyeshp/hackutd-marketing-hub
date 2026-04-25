@@ -187,11 +187,84 @@ function AssigneeStack({ assignees, taskId, onSaved }) {
   )
 }
 
-function TaskCard({ task, preview, onCycleStatus, onAssigneesUpdated }) {
+function TaskDetailDialog({ task, open, onOpenChange, preview, onCycleStatus, onAssigneesUpdated, onTeamChange }) {
+  if (!task) return null
+
   return (
-    <div className="rounded-2xl border border-border bg-card px-4 py-3 transition hover:bg-accent/40">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-base leading-snug">{task.title}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {preview ? (
+              <button onClick={() => onCycleStatus(task.id)} title="Cycle status">
+                <Badge variant={STATUS_COLORS[task.status] ?? 'secondary'}>{formatTaskStatus(task.status)}</Badge>
+              </button>
+            ) : (
+              <Badge variant={STATUS_COLORS[task.status] ?? 'secondary'}>{formatTaskStatus(task.status)}</Badge>
+            )}
+            {task.due && (
+              <span className="text-xs text-muted-foreground">
+                Due {formatDateLabel(task.due, { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Team</p>
+            <Select value={task.team} onValueChange={team => onTeamChange(task.id, team)}>
+              <SelectTrigger className="h-8 w-40 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TEAM_ORDER.map(value => (
+                  <SelectItem key={value} value={value} className="text-xs">
+                    {getTeamLabel(value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assignees</p>
+            <AssigneeStack
+              assignees={task.assignees ?? []}
+              taskId={task.id}
+              onSaved={onAssigneesUpdated}
+            />
+          </div>
+
+          {task.clickupUrl && (
+            <a
+              href={task.clickupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open in ClickUp
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function TaskCard({ task, preview, onCycleStatus, onAssigneesUpdated, onSelect }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSelect()}
+      className="cursor-pointer rounded-2xl border border-border bg-card px-4 py-3 transition hover:border-foreground/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <div className="flex items-center gap-3">
-        {/* Left: title + due */}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
           {task.due && (
@@ -201,8 +274,8 @@ function TaskCard({ task, preview, onCycleStatus, onAssigneesUpdated }) {
           )}
         </div>
 
-        {/* Right: team badge + status + assignees + link */}
-        <div className="flex flex-shrink-0 items-center gap-2">
+        {/* Stop propagation so interactive controls don't open the dialog */}
+        <div className="flex flex-shrink-0 items-center gap-2" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
           <TeamBadge team={task.team} />
 
           {preview ? (
@@ -395,6 +468,7 @@ export default function TasksView() {
   const [preview, setPreview] = useState(false)
   const [teamFilter, setTeamFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [selectedTask, setSelectedTask] = useState(null)
 
   async function load(refresh = false) {
     setLoading(true)
@@ -439,6 +513,15 @@ export default function TasksView() {
     setTasks((prev) => [task, ...prev])
   }
 
+  function handleTeamChange(taskId, team) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, team } : t))
+    fetch('/api/clickup', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, team }),
+    }).catch(() => {})
+  }
+
   function cycleStatus(taskId) {
     setTasks((prev) =>
       prev.map((task) => {
@@ -450,8 +533,23 @@ export default function TasksView() {
     )
   }
 
+  const liveSelectedTask = selectedTask
+    ? tasks.find(t => t.id === selectedTask.id) ?? selectedTask
+    : null
+
   return (
     <div className="space-y-5">
+      <TaskDetailDialog
+        task={liveSelectedTask}
+        open={Boolean(selectedTask)}
+        onOpenChange={open => !open && setSelectedTask(null)}
+        preview={preview}
+        onCycleStatus={cycleStatus}
+        onAssigneesUpdated={(id, assignees) =>
+          setTasks(prev => prev.map(t => t.id === id ? { ...t, assignees } : t))
+        }
+        onTeamChange={handleTeamChange}
+      />
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex flex-col gap-4 border-b border-border px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -539,6 +637,7 @@ export default function TasksView() {
                 onAssigneesUpdated={(id, assignees) =>
                   setTasks(prev => prev.map(t => t.id === id ? { ...t, assignees } : t))
                 }
+                onSelect={() => setSelectedTask(task)}
               />
             ))}
           </div>

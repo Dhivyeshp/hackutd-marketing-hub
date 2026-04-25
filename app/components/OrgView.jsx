@@ -1,8 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { TEAM_COLORS, TEAM_LABELS } from '@/lib/marketing'
 import { cn } from '@/lib/utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 const TEAM_ORDER = ['design', 'uiux', 'content', 'outreach']
 
@@ -33,9 +40,68 @@ function InitialsAvatar({ initials, name }) {
   )
 }
 
+function formatStatus(status) {
+  return (status ?? 'to do').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function TaskDetailDialog({ task, onClose }) {
+  if (!task) return null
+  const teamColors = TEAM_COLORS[task.team] ?? TEAM_COLORS.design
+  return (
+    <Dialog open onOpenChange={open => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base leading-snug">{task.title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', teamColors.bg, teamColors.text)}>
+              {TEAM_LABELS[task.team] ?? task.team}
+            </span>
+            <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+              {formatStatus(task.status)}
+            </span>
+          </div>
+
+          {task.due && (
+            <p className="text-sm text-muted-foreground">Due {formatDue(task.due)}</p>
+          )}
+
+          {task.assignees?.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned to</p>
+              <div className="flex flex-wrap gap-2">
+                {task.assignees.map((a, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <InitialsAvatar initials={a.initials} name={a.name} />
+                    <span className="text-xs text-foreground">{a.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {task.clickupUrl && (
+            <a
+              href={task.clickupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open in ClickUp
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function OrgView() {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
     fetch('/api/tasks/all')
@@ -46,6 +112,8 @@ export default function OrgView() {
 
   return (
     <div className="space-y-4">
+      <TaskDetailDialog task={selectedTask} onClose={() => setSelectedTask(null)} />
+
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Org View</h1>
         <p className="mt-1 text-sm text-muted-foreground">A read-only snapshot of what each team is working on.</p>
@@ -70,7 +138,11 @@ export default function OrgView() {
                     <p className="py-2 text-center text-xs text-muted-foreground">—</p>
                   )}
                   {teamTasks.map(task => (
-                    <div key={task.id} className="rounded-lg border border-border bg-card px-2.5 py-2.5 text-xs text-foreground space-y-2">
+                    <button
+                      key={task.id}
+                      onClick={() => setSelectedTask(task)}
+                      className="w-full rounded-lg border border-border bg-card px-2.5 py-2.5 text-left text-xs text-foreground space-y-2 transition hover:border-foreground/20 hover:shadow-sm"
+                    >
                       <p className="line-clamp-2 font-medium leading-snug">{task.title}</p>
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex -space-x-1.5">
@@ -80,7 +152,7 @@ export default function OrgView() {
                         </div>
                         {task.due && <span className="text-muted-foreground tabular-nums">{formatDue(task.due)}</span>}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>

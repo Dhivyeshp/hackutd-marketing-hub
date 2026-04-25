@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, CalendarClock, ChevronDown, ChevronUp, ExternalLink, Layers3, RefreshCw, TriangleAlert, Video } from 'lucide-react'
+import { ArrowUpRight, CalendarClock, ExternalLink, Layers3, RefreshCw, TriangleAlert, Video } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { fetchReels, fetchTasks } from '@/lib/api'
@@ -20,50 +20,26 @@ import {
 } from '@/lib/marketing'
 import { cn } from '@/lib/utils'
 
-const CHECKIN_DOT = {
-  on_track:   'bg-green-500',
-  needs_help: 'bg-yellow-500',
-  blocked:    'bg-red-500',
-}
-const CHECKIN_LABEL = {
-  on_track: 'On track', needs_help: 'Needs help', blocked: 'Blocked',
-}
-
 export default function OverviewPanel({ previewMode = false }) {
-  const [tasks, setTasks]         = useState([])
-  const [reels, setReels]         = useState([])
-  const [requests, setRequests]   = useState([])
-  const [checkins, setCheckins]   = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [expandedCheckin, setExpandedCheckin] = useState(null)
+  const [tasks, setTasks]       = useState([])
+  const [reels, setReels]       = useState([])
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading]   = useState(true)
 
   async function load(refresh = false) {
     setLoading(true)
-    const [tasksRes, reelsRes] = await Promise.all([
+    const [tasksRes, reelsRes, requestsData] = await Promise.all([
       fetchTasks(refresh),
       fetchReels(refresh).catch(() => ({ reels: [] })),
+      fetch('/api/requests', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ requests: [] })),
     ])
     setTasks(tasksRes.tasks)
     setReels(reelsRes.reels)
-
-    await Promise.all([
-      fetch('/api/requests', { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => setRequests(data.requests ?? []))
-        .catch(() => setRequests([])),
-      fetch('/api/checkins', { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => setCheckins(data.checkins ?? []))
-        .catch(() => setCheckins([])),
-    ])
-
+    setRequests(requestsData.requests ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [previewMode])
-
-  const submittedCount = checkins.filter(c => c.status).length
-  const totalMembers   = checkins.length
 
   const openTasks      = countOpenTasks(tasks)
   const pendingReels   = reels.filter(r => isPendingReel(r.status)).length
@@ -186,54 +162,6 @@ export default function OverviewPanel({ previewMode = false }) {
               )
             })}
           </div>
-        </div>
-      </section>
-
-      {/* Thursday check-ins */}
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">This week's check-ins</h3>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {loading ? 'Loading…' : `${submittedCount} / ${totalMembers} submitted`}
-            </p>
-          </div>
-          <Badge variant={submittedCount < totalMembers ? 'warning' : 'secondary'}>
-            {loading ? '…' : `${submittedCount}/${totalMembers}`}
-          </Badge>
-        </div>
-        <div className="mt-4 space-y-1">
-          {loading && [1,2,3].map(i => <div key={i} className="h-9 animate-pulse rounded-xl bg-muted" />)}
-          {!loading && checkins.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              No members found.
-            </div>
-          )}
-          {!loading && checkins.map(member => (
-            <div key={member.user_id} className="rounded-lg">
-              <button
-                type="button"
-                onClick={() => setExpandedCheckin(expandedCheckin === member.user_id ? null : member.user_id)}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-accent/50"
-              >
-                <span className={cn(
-                  'h-2.5 w-2.5 flex-shrink-0 rounded-full',
-                  member.status ? CHECKIN_DOT[member.status] : 'bg-muted-foreground/30'
-                )} />
-                <span className="flex-1 text-sm font-medium text-foreground">{member.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {member.status ? CHECKIN_LABEL[member.status] : 'Not submitted'}
-                </span>
-                {member.note && (expandedCheckin === member.user_id
-                  ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                  : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-              </button>
-              {expandedCheckin === member.user_id && member.note && (
-                <p className="ml-8 pb-2 pr-3 text-xs text-muted-foreground">"{member.note}"</p>
-              )}
-            </div>
-          ))}
         </div>
       </section>
 

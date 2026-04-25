@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ArrowRight, Check, ChevronDown, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TEAM_COLORS } from '@/lib/marketing'
 import { REQUEST_COLUMNS, getRequestBoardStatus } from '@/lib/requests'
@@ -12,7 +13,7 @@ import { cn } from '@/lib/utils'
 const COLUMN_META = {
   submitted: { label: 'Submitted', header: 'bg-muted text-foreground', dot: 'bg-muted-foreground' },
   in_review: { label: 'In Review', header: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200', dot: 'bg-blue-400' },
-  approved: { label: 'Approved', header: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200', dot: 'bg-emerald-500' },
+  completed: { label: 'Completed', header: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200', dot: 'bg-emerald-500' },
   in_clickup: { label: 'In ClickUp', header: 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200', dot: 'bg-violet-500' },
 }
 
@@ -83,26 +84,114 @@ function AssigneePopover({ request, assigneeOptions, onAssign }) {
   )
 }
 
-function RequestCard({
-  request,
-  assigneeOptions,
-  moving,
-  onAssign,
-  onApprove,
-  onStatusChange,
-}) {
-  const teamColors = TEAM_COLORS[request.team] ?? TEAM_COLORS.design
+function TeamPill({ team }) {
+  const teamColors = TEAM_COLORS[team] ?? TEAM_COLORS.design
+  return (
+    <span className={cn(
+      'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold',
+      teamColors.bg, teamColors.text, teamColors.border
+    )}>
+      {team === 'uiux' ? 'UI/UX' : team.charAt(0).toUpperCase() + team.slice(1)}
+    </span>
+  )
+}
+
+function RequestDetailDialog({ request, assigneeOptions, moving, open, onOpenChange, onAssign, onApprove, onStatusChange }) {
+  if (!request) return null
   const boardStatus = getRequestBoardStatus(request)
-  const isDeferred = request.status === 'deferred'
   const canApprove = (request.assignedToUserIds?.length > 0) || Boolean(request.assigneeName)
-  const primaryActionLabel = boardStatus === 'approved' ? 'Send to ClickUp' : 'Approve'
+  const primaryActionLabel = boardStatus === 'completed' ? 'Send to ClickUp' : 'Approve'
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <span className="truncate">{request.requester}</span>
+            <span className="ml-auto shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+              external
+            </span>
+          </DialogTitle>
+          <p className="text-xs text-muted-foreground">
+            {request.fromOrg || 'External request'}
+            {request.timestamp ? ` · ${request.timestamp}` : ''}
+          </p>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {request.type && (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Type</p>
+              <p className="text-sm font-medium text-foreground">{request.type}</p>
+            </div>
+          )}
+
+          {request.description && (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Description</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{request.description}</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <TeamPill team={request.team} />
+            {request.due && (
+              <span className="text-xs text-muted-foreground">Due {formatDue(request.due)}</span>
+            )}
+          </div>
+
+          {boardStatus !== 'in_clickup' && (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assignee</p>
+              <AssigneePopover request={request} assigneeOptions={assigneeOptions} onAssign={onAssign} />
+            </div>
+          )}
+
+          {boardStatus === 'in_clickup' && request.assigneeName && (
+            <p className="text-xs text-muted-foreground">Assigned to {request.assigneeName}</p>
+          )}
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {boardStatus !== 'in_clickup' && (
+              <Button
+                size="sm"
+                className={cn('flex-1 text-xs', !canApprove && 'cursor-not-allowed opacity-40')}
+                disabled={!canApprove || moving}
+                title={!canApprove ? 'Select an assignee first' : ''}
+                onClick={() => onApprove(request)}
+              >
+                {moving ? <RefreshCw className="h-3 w-3 animate-spin" /> : boardStatus === 'completed' ? <><ArrowRight className="h-3 w-3" /> {primaryActionLabel}</> : primaryActionLabel}
+              </Button>
+            )}
+            {boardStatus === 'submitted' && (
+              <Button size="sm" variant="outline" className="flex-1 text-xs" disabled={moving} onClick={() => onStatusChange(request, 'in_review')}>
+                Review
+              </Button>
+            )}
+            {boardStatus === 'in_review' && (
+              <Button size="sm" variant="outline" className="flex-1 text-xs" disabled={moving} onClick={() => onStatusChange(request, 'submitted')}>
+                Back to submitted
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function RequestCard({ request, assigneeOptions, moving, onAssign, onApprove, onStatusChange, onSelect }) {
+  const boardStatus = getRequestBoardStatus(request)
+  const canApprove = (request.assignedToUserIds?.length > 0) || Boolean(request.assigneeName)
+  const primaryActionLabel = boardStatus === 'completed' ? 'Send to ClickUp' : 'Approve'
 
   return (
     <div
-      className={cn(
-        'space-y-3 rounded-2xl border border-border bg-card p-4 transition',
-        isDeferred && boardStatus === 'submitted' && 'opacity-60'
-      )}
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSelect()}
+      className="cursor-pointer space-y-3 rounded-2xl border border-border bg-card p-4 transition hover:border-foreground/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -123,97 +212,44 @@ function RequestCard({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span
-          className={cn(
-            'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold',
-            teamColors.bg,
-            teamColors.text,
-            teamColors.border
-          )}
-        >
-          {request.team === 'uiux' ? 'UI/UX' : request.team.charAt(0).toUpperCase() + request.team.slice(1)}
-        </span>
+        <TeamPill team={request.team} />
         {request.due && (
           <span className="text-xs text-muted-foreground">Due {formatDue(request.due)}</span>
         )}
-        {isDeferred && boardStatus === 'submitted' && (
-          <Badge variant="outline" className="border-border bg-muted text-muted-foreground">
-            Deferred
-          </Badge>
-        )}
       </div>
 
-      {boardStatus !== 'in_clickup' && (
-        <AssigneePopover
-          request={request}
-          assigneeOptions={assigneeOptions}
-          onAssign={onAssign}
-        />
-      )}
-
-      {boardStatus === 'in_clickup' && request.assigneeName && (
-        <p className="text-xs text-muted-foreground">Assigned to {request.assigneeName}</p>
-      )}
-
-      <div className="flex flex-wrap gap-1.5 pt-1">
+      {/* Stop propagation so clicks on interactive controls don't open the dialog */}
+      <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
         {boardStatus !== 'in_clickup' && (
-          <Button
-            size="sm"
-            className={cn(
-              'flex-1 text-xs',
-              !canApprove && 'cursor-not-allowed opacity-40'
-            )}
-            disabled={!canApprove || moving}
-            title={!canApprove ? 'Select an assignee first' : ''}
-            onClick={() => onApprove(request)}
-          >
-            {moving ? (
-              <RefreshCw className="h-3 w-3 animate-spin" />
-            ) : boardStatus === 'approved' ? (
-              <>
-                <ArrowRight className="h-3 w-3" /> {primaryActionLabel}
-              </>
-            ) : (
-              primaryActionLabel
-            )}
-          </Button>
+          <AssigneePopover request={request} assigneeOptions={assigneeOptions} onAssign={onAssign} />
+        )}
+        {boardStatus === 'in_clickup' && request.assigneeName && (
+          <p className="text-xs text-muted-foreground">Assigned to {request.assigneeName}</p>
         )}
 
-        {boardStatus === 'submitted' && !isDeferred && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 text-xs"
-            disabled={moving}
-            onClick={() => onStatusChange(request, 'in_review')}
-          >
-            Review
-          </Button>
-        )}
-
-        {boardStatus === 'in_review' && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 text-xs"
-            disabled={moving}
-            onClick={() => onStatusChange(request, 'submitted')}
-          >
-            Back to submitted
-          </Button>
-        )}
-
-        {boardStatus !== 'in_clickup' && (
-          <Button
-            size="sm"
-            variant={isDeferred ? 'outline' : 'ghost'}
-            className="text-xs text-muted-foreground"
-            disabled={moving}
-            onClick={() => onStatusChange(request, isDeferred ? 'submitted' : 'deferred')}
-          >
-            {isDeferred ? 'Reconsider' : 'Defer'}
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-1.5 pt-3">
+          {boardStatus !== 'in_clickup' && (
+            <Button
+              size="sm"
+              className={cn('flex-1 text-xs', !canApprove && 'cursor-not-allowed opacity-40')}
+              disabled={!canApprove || moving}
+              title={!canApprove ? 'Select an assignee first' : ''}
+              onClick={() => onApprove(request)}
+            >
+              {moving ? <RefreshCw className="h-3 w-3 animate-spin" /> : boardStatus === 'completed' ? <><ArrowRight className="h-3 w-3" /> {primaryActionLabel}</> : primaryActionLabel}
+            </Button>
+          )}
+          {boardStatus === 'submitted' && (
+            <Button size="sm" variant="outline" className="flex-1 text-xs" disabled={moving} onClick={() => onStatusChange(request, 'in_review')}>
+              Review
+            </Button>
+          )}
+          {boardStatus === 'in_review' && (
+            <Button size="sm" variant="outline" className="flex-1 text-xs" disabled={moving} onClick={() => onStatusChange(request, 'submitted')}>
+              Back to submitted
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -226,6 +262,7 @@ export default function RequestsView() {
   const [error, setError] = useState('')
   const [moving, setMoving] = useState({})
   const [toast, setToast] = useState(null)
+  const [selectedRequest, setSelectedRequest] = useState(null)
   const toastTimeoutRef = useRef(null)
 
   const usersById = useMemo(
@@ -329,7 +366,16 @@ export default function RequestsView() {
       }
 
       updateRequest(request.id, data.request)
-      pushToast(status === 'deferred' ? 'Request deferred' : status === 'submitted' ? 'Request restored' : 'Request moved to review')
+
+      if (request.id.startsWith('sheet-request-')) {
+        fetch('/api/sheets', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId: request.id, status }),
+        }).catch(() => {})
+      }
+
+      pushToast(status === 'submitted' ? 'Request restored' : 'Request moved to review')
     } catch (statusError) {
       pushToast(statusError.message, 'error')
     } finally {
@@ -369,8 +415,24 @@ export default function RequestsView() {
     }
   }
 
+  // Keep selectedRequest in sync with latest state (e.g. after approve/status change)
+  const liveSelectedRequest = selectedRequest
+    ? requests.find(r => r.id === selectedRequest.id) ?? selectedRequest
+    : null
+
   return (
     <div className="space-y-5">
+      <RequestDetailDialog
+        request={liveSelectedRequest}
+        assigneeOptions={assignableUsers}
+        moving={Boolean(moving[liveSelectedRequest?.id])}
+        open={Boolean(selectedRequest)}
+        onOpenChange={open => !open && setSelectedRequest(null)}
+        onAssign={handleAssign}
+        onApprove={handleApprove}
+        onStatusChange={handleStatusChange}
+      />
+
       {toast && (
         <div
           className={cn(
@@ -389,7 +451,7 @@ export default function RequestsView() {
           <div>
             <h2 className="text-2xl font-semibold text-foreground">Requests</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              External intake pipeline with assignee-gated approvals and persistent deferred requests.
+              External intake pipeline with assignee-gated approvals.
             </p>
           </div>
           <Button variant="outline" size="icon" onClick={load} disabled={loading} className="rounded-xl">
@@ -446,6 +508,7 @@ export default function RequestsView() {
                     onAssign={handleAssign}
                     onApprove={handleApprove}
                     onStatusChange={handleStatusChange}
+                    onSelect={() => setSelectedRequest(request)}
                   />
                 ))}
               </div>
