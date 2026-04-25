@@ -15,8 +15,7 @@ export async function POST(request) {
     .single()
 
   if (!user) {
-    // Don't reveal whether the email exists
-    return Response.json({ ok: true })
+    return Response.json({ error: 'No account found for this email.' }, { status: 404 })
   }
 
   const code = String(Math.floor(100000 + Math.random() * 900000))
@@ -27,23 +26,31 @@ export async function POST(request) {
     .update({ login_code: code, login_code_expires_at: expires })
     .eq('id', user.id)
 
-  if (process.env.RESEND_API_KEY) {
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: process.env.RESEND_FROM_EMAIL ?? 'hub@hackutd.com',
-        to: email,
-        subject: 'Your HackUTD login code',
-        html: `<p>Hi ${user.name},</p><p>Your login code is: <strong style="font-size:24px;letter-spacing:4px">${code}</strong></p><p>Expires in 10 minutes.</p>`,
-      }),
-    })
-  } else {
-    // Dev fallback — log to console
+  if (!process.env.RESEND_API_KEY) {
     console.log(`[send-code] ${email} → ${code}`)
+    return Response.json({ ok: true })
+  }
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev',
+      to: email,
+      subject: 'HackUTD Marketing Hub — login code',
+      html: `<p>Hi ${user.name},</p><p>Your HackUTD Marketing Hub login code is:</p><p><strong style="font-size:28px;letter-spacing:6px;font-family:monospace">${code}</strong></p><p style="color:#888;font-size:12px">Expires in 10 minutes. If you didn't request this, ignore this email.</p>`,
+    }),
+  })
+
+  if (!emailRes.ok) {
+    const emailErr = await emailRes.json().catch(() => null)
+    return Response.json(
+      { error: emailErr?.message ?? 'Failed to send login code. Try again.' },
+      { status: 500 }
+    )
   }
 
   return Response.json({ ok: true })

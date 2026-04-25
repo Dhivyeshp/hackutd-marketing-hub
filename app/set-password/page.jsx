@@ -1,10 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function SetPasswordPage() {
+function SetPasswordForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const next = searchParams.get('next') || '/my-tasks'
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
@@ -34,9 +37,7 @@ export default function SetPasswordPage() {
       return
     }
 
-    // Refresh session info then redirect
-    const me = await fetch('/api/auth/me').then(r => r.json())
-    router.push(me.role === 'lead' ? '/dashboard' : '/my-tasks')
+    router.push(next)
   }
 
   return (
@@ -45,7 +46,7 @@ export default function SetPasswordPage() {
         <div className="text-center space-y-1">
           <img src="/logo.png" alt="HackUTD" className="mx-auto mb-4 h-12 w-12 rounded-xl object-contain" />
           <h1 className="text-xl font-semibold text-foreground">Set your password</h1>
-          <p className="text-sm text-muted-foreground">Choose a password for future sign-ins.</p>
+          <p className="text-sm text-muted-foreground">Choose a password for faster sign-ins next time.</p>
         </div>
 
         {error && <p className="text-xs text-destructive">{error}</p>}
@@ -79,7 +80,24 @@ export default function SetPasswordPage() {
             {loading ? 'Saving…' : 'Set password & continue'}
           </button>
         </form>
+
+        <p className="text-center text-xs text-muted-foreground">
+          <button
+            onClick={() => router.push(next)}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Skip for now
+          </button>
+        </p>
       </div>
     </div>
+  )
+}
+
+export default function SetPasswordPage() {
+  return (
+    <Suspense>
+      <SetPasswordForm />
+    </Suspense>
   )
 }

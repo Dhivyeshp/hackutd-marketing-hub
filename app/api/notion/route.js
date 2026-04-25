@@ -146,7 +146,9 @@ async function fetchAllPages(dbId, statusPropName) {
 }
 
 const NOTION_DB_KEY = 'notion:db'
-const NOTION_TTL_MS = 60_000 // 60 seconds
+const NOTION_DBID_KEY = 'notion:dbid'
+const NOTION_TTL_MS = 5 * 60_000 // 5 minutes
+const NOTION_DBID_TTL_MS = 60 * 60_000 // 1 hour — DB ID rarely changes
 
 export async function GET(request) {
   const session = getSession()
@@ -164,7 +166,7 @@ export async function GET(request) {
 
   try {
     const result = await cached(NOTION_DB_KEY, NOTION_TTL_MS, async () => {
-      const { dbId, schemaData } = await resolveDbId(NOTION_DATABASE_ID)
+      const { dbId, schemaData } = await cached(NOTION_DBID_KEY, NOTION_DBID_TTL_MS, () => resolveDbId(NOTION_DATABASE_ID))
       const dbProps = schemaData.properties ?? {}
 
       const statusEntry = Object.entries(dbProps).find(([, v]) => v.type === 'status')

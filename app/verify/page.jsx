@@ -35,12 +35,8 @@ function VerifyForm() {
     }
 
     sessionStorage.removeItem('verify_email')
-
-    if (data.needsPassword) {
-      router.push('/set-password')
-    } else {
-      router.push(data.role === 'lead' ? '/dashboard' : '/my-tasks')
-    }
+    const dest = data.role === 'lead' ? '/dashboard' : '/my-tasks'
+    router.push(`/set-password?next=${encodeURIComponent(dest)}`)
   }
 
   async function handleResend() {

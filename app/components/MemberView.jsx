@@ -12,6 +12,7 @@ import {
   Layers3,
   LogOut,
   Square,
+  Star,
   Video,
 } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -21,6 +22,7 @@ import { cn } from '@/lib/utils'
 import ContentReelsView from '@/components/ContentReelsView'
 import CalendarView from '@/components/CalendarView'
 import OrgView from '@/components/OrgView'
+import FeaturedSpinView from '@/components/FeaturedSpinView'
 
 const QUICK_ACCESS = {
   design: [
@@ -54,7 +56,10 @@ const BASE_NAV = [
   { id: 'org-view', label: 'Org View', Icon: Layers3 },
 ]
 
-const CONTENT_NAV = { id: 'reels', label: 'Reels', Icon: Video }
+const CONTENT_EXTRA_NAV = [
+  { id: 'reels', label: 'Reels', Icon: Video },
+  { id: 'featured', label: 'Featured', Icon: Star },
+]
 
 const SIDEBAR_LINKS = QUICK_LINKS
 
@@ -220,7 +225,7 @@ export default function MemberView({ user, onSignOut }) {
   const colors = TEAM_COLORS[user.team] ?? TEAM_COLORS.design
   const links = QUICK_ACCESS[user.team] ?? []
   const firstName = user.name?.split(' ')[0] ?? 'there'
-  const MEMBER_NAV = user.team === 'content' ? [...BASE_NAV, CONTENT_NAV] : BASE_NAV
+  const MEMBER_NAV = user.team === 'content' ? [...BASE_NAV, ...CONTENT_EXTRA_NAV] : BASE_NAV
   const activeLabel = MEMBER_NAV.find(item => item.id === activeView)?.label ?? 'Home'
 
   return (
@@ -394,6 +399,7 @@ export default function MemberView({ user, onSignOut }) {
           {activeView === 'org-view' && <OrgView />}
           {activeView === 'calendar' && <CalendarView />}
           {activeView === 'reels' && <ContentReelsView />}
+          {activeView === 'featured' && <FeaturedSpinView />}
         </main>
       </div>
     </div>
