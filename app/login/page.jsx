@@ -81,7 +81,7 @@ function LoginForm() {
     <div className="flex min-h-screen">
       {/* Left — background */}
       <div className="hidden md:block md:w-1/2 relative">
-        <img src="/onboardingbg.png" alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img src="/login-bg.webp" alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-black/30" />
         <div className="absolute bottom-10 left-10 text-white">
           <p className="text-2xl font-semibold leading-snug">HackUTD<br />Marketing Hub</p>
