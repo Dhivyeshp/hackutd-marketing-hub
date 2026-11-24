@@ -5,7 +5,9 @@ const COOKIE_NAME = 'hub_session'
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 function getSecret() {
-  return process.env.SESSION_SECRET || null
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET
+  // Local dev fallback so the login bypass works without a .env.local. Never used in production.
+  return process.env.NODE_ENV !== 'production' ? 'dev-only-insecure-session-secret' : null
 }
 
 function sign(payload) {

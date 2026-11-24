@@ -34,6 +34,26 @@ function LoginForm() {
     router.push(data.role === 'lead' ? '/dashboard' : '/my-tasks')
   }
 
+  // TEMPORARY: skip login while auth/Supabase isn't configured. See /api/auth/bypass.
+  async function handleBypass(role) {
+    setError('')
+    setLoading(true)
+    const res = await fetch('/api/auth/bypass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setLoading(false)
+
+    if (!res.ok) {
+      setError(data.error || 'Bypass failed.')
+      return
+    }
+
+    router.push(data.role === 'lead' ? '/dashboard' : '/my-tasks')
+  }
+
   async function handleSendCode(e) {
     e.preventDefault()
     setError('')
@@ -145,6 +165,29 @@ function LoginForm() {
               </button>
             </form>
           )}
+
+          {/* TEMPORARY login bypass — remove once real auth works */}
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-center text-xs text-muted-foreground">Dev: skip login for now</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleBypass('lead')}
+                className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
+              >
+                Continue as lead
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleBypass('member')}
+                className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
+              >
+                Continue as member
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

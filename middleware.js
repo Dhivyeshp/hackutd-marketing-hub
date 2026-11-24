@@ -15,7 +15,9 @@ async function getSession(request) {
   const raw = request.cookies.get(COOKIE_NAME)?.value
   if (!raw) return null
 
-  const secret = process.env.SESSION_SECRET
+  // Must match getSecret() in app/lib/session.js (incl. the dev-only fallback)
+  const secret = process.env.SESSION_SECRET ||
+    (process.env.NODE_ENV !== 'production' ? 'dev-only-insecure-session-secret' : null)
   if (!secret) return null
 
   const dot = raw.lastIndexOf('.')
